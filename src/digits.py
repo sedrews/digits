@@ -21,10 +21,7 @@ class RepairModel(ABC):
 
     # Can Override this to do something more sophisticated
     def initial_solution(self, program):
-        soln = Solution()
-        soln.prog = program
-        soln.post = False
-        soln.error = 0
+        return Solution(prog=program, post=False, error=0)
 
     # constraints is a dictionary from the input tuple to the output value
     @abstractmethod
@@ -42,41 +39,42 @@ class Solution(object):
     # There will be potentially very many of these objects in memory
     __slots__ = 'prog','post','error'
 
-    def __init__(self):
-        self.prog = None # An executable function; digits calls it with a single arg from Sampler
-        self.post = False
-        self.error = 0
+    def __init__(self, prog=None, post=None, error=None):
+        self.prog = prog # An executable function; digits calls it with a single arg from Sampler
+        self.post = post
+        self.error = error
 
 
 # Structures for Digits to use internally
 
 
+# Right now this badly emulates a list, but eventually it will be sophisticated
 class _Queue:
 
     def __init__(self):
         self.elements = []
 
-    def empty(self):
-        return len(self.elements) == 0
+    def __len__(self):
+        return len(self.elements)
 
     def pop(self):
         ret = self.elements[0]
         del self.elements[0]
         return ret
 
-    def push(self, element):
+    def append(self, element):
         self.elements.append(element)
 
 
 # I don't actually know what to do with this yet
 class Sampler:
 
-    def __init__(self):
-        pass
+    def __init__(self, prob_prog):
+        self.prob_prog = prob_prog
 
     # This should return a named tuple
     def next_sample(self):
-        pass
+        return self.prob_prog()
 
 
 # Digits itself
@@ -84,42 +82,56 @@ class Sampler:
 
 class Digits:
     
-    def __init__(self):
-        pass
+    # Precondition can either be an function that returns a named tuple
+    # or an instance of Sampler
+    def __init__(self, precondition, repair_model, outputs=[0,1]):
+        self.repair_model = repair_model
+        if isinstance(precondition, Sampler):
+            self.sampler = precondition
+        else:
+            self.sampler = Sampler(precondition)
+        self.outputs = outputs
 
-    def repair(self, n, sampler, repair_model, evaluator):
-        outputs = [True, False]
+    def repair(self, n, program, evaluator):
         samples = []
 
         # Can encode the tree as a map from the constraints to solutions
         solutions = {}
-        solutions[()] = repair_model.initial_solution(program)
+        solutions[()] = self.repair_model.initial_solution(program)
 
         # For determining what solutions remain to be computed
         leaves = [()] # Initally just the empty tuple; eventually stuff like (0,1,1,0) (0,1,1,1) etc
         worklist = _Queue()
 
         while len(samples) < n:
-            samples.append(sampler.next_sample())
+            samples.append(self.sampler.next_sample())
+            print("starting depth", len(samples))
             for leaf in leaves:
-                worklist.push(leaf)
-            while not worklist.empty():
+                worklist.append(leaf)
+            while not len(worklist) == 0:
                 leaf = worklist.pop()
+                print("  popped a leaf (" + str(len(worklist)) + " remaining)")
                 leaves.remove(leaf)
                 # Explore this leaf's children
                 # Run the program at this leaf to propagate its solution to one child
-                val = solutions[leaf].prog(*samples[-1])
-                for value in outputs:
+                val = solutions[leaf].prog(samples[-1])
+                for value in self.outputs:
+                    print("    trying child " + str(value) + " -- ", end="")
                     if value == val: # We can use the same solution object
+                        print("propagating solution")
                         child = solutions[leaf]
-                        self.leaves.append((*leaf, value))
-                        self.solutions[(*leaf, value)] = child
+                        leaves.append((*leaf, value))
+                        solutions[(*leaf, value)] = child
                     else: # We have to compute the solution
-                        child = repair_model.make_solution(dict(zip(samples, (*leaf, value))))
+                        child = self.repair_model.make_solution(dict(zip(samples, (*leaf, value))))
                         if child is not None:
-                            self.leaves.append((*leaf, value))
-                            self.solutions[(*leaf, value)] = child
+                            print("sat")
+                            leaves.append((*leaf, value))
+                            solutions[(*leaf, value)] = child
                             child.post = evaluator.compute_post(child.prog)
-                            child.error = evaluator.compute_error(child.prog)
+                            if child.post: # Only compute error for correct solutions
+                                child.error = evaluator.compute_error(child.prog)
+                        else:
+                            print("unsat")
         # TODO .values() is inefficient with multiplicity
         return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)

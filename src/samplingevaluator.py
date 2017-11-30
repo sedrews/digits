@@ -14,15 +14,16 @@ class SamplingEvaluator(Evaluator):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
         trials = [(sample, prog(sample)) for sample in samples]
         counter = {event : 0 for event in self.post.probs}
-        for sample in samples:
-            for event,value in post.evaluate_prob_events(sample).items():
+        for trial in trials:
+            res = self.post.evaluate_prob_events(trial)
+            for event,value in res.items():
                 counter[event] += 1 if value else 0
         estimates = {event : counter[event] / self.num_samples for event in counter}
-        return post.evaluate_expression(estimates)
+        return self.post.evaluate_expression(estimates)
 
     def compute_error(self, prog):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
         counter = 0
         for sample in samples:
-            counter += 1 if prog(sample) == orig_prog(sample) else 0
+            counter += 1 if prog(sample) == self.orig_prog(sample) else 0
         return counter / self.num_samples

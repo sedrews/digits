@@ -24,7 +24,11 @@ class ProbPost:
     
     # Map a Pr->R assignment to True/False
     def evaluate_expression(self, pr_map):
-        return self.root.evaluate_expression(pr_map)
+        try:
+            val = self.root.evaluate_expression(pr_map)
+        except ZeroDivisionError:
+            val = False
+        return val
 
     # Map variable values to an event assignment
     # The format of v_map only needs to be consistent
