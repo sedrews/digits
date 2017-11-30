@@ -43,7 +43,7 @@ class Solution(object):
     __slots__ = 'prog','post','error'
 
     def __init__(self):
-        self.prog = None # An executable function; digits calls it with *sample as args
+        self.prog = None # An executable function; digits calls it with a single arg from Sampler
         self.post = False
         self.error = 0
 
@@ -74,6 +74,7 @@ class Sampler:
     def __init__(self):
         pass
 
+    # This should return a named tuple
     def next_sample(self):
         pass
 

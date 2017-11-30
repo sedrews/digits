@@ -27,6 +27,10 @@ class ProbPost:
         return self.root.evaluate_expression(pr_map)
 
     # Map variable values to an event assignment
+    # The format of v_map only needs to be consistent
+    #   with what is expected by the predicates
+    #   (which take a single argument)
+    #   that are used in the Events of type VAL
     def evaluate_prob_events(self, v_map):
         return {e : e.evaluate_prob_event(v_map) for e in self.probs}
 

@@ -39,22 +39,36 @@ def group_fairness(minority, hired, constant):
 
     return post
 
+
 if __name__ == "__main__":
 
-    minority = lambda v_map : v_map["sex"] == "female"
-    hired = lambda v_map : v_map["output"] > 0
+    from collections import namedtuple
+
+    Sample = namedtuple('Sample', 'age sex')
+
+    # iopair is of the form (Sample, bool) where the bool is the result
+    minority = lambda iopair : iopair[0].sex != "male"
+    hired = lambda iopair : iopair[1]
 
     post = group_fairness(minority, hired, 0.9)
 
-    samples = [{"sex" :   "male", "output" :  True},
-               {"sex" :   "male", "output" :  True},
-               {"sex" :   "male", "output" : False},
-               {"sex" : "female", "output" :  True},
-               {"sex" : "female", "output" : False}]
-    ec = {v : 0 for v in post.probs}
-    for sample in samples: 
-        e_map = post.evaluate_prob_events(sample)
-        for e in e_map:
-            ec[e] += 1 if e_map[e] else 0
-    ec = {e : ec[e] / len(samples) for e in ec}
-    print(post.evaluate_expression(ec))
+    def eval_post(post, samples):
+        counter = {event : 0 for event in post.probs}
+        for sample in samples: 
+            e_map = post.evaluate_prob_events(sample)
+            for event in e_map:
+                counter[event] += 1 if e_map[event] else 0
+        counter = {event : counter[event] / len(samples) for event in counter}
+        return post.evaluate_expression(counter)
+
+    samples = [(Sample(24,   'male'),  True),
+               (Sample(24,   'male'),  True),
+               (Sample(40,   'male'), False),
+               (Sample(26, 'female'),  True),
+               (Sample(38, 'female'), False)]
+    assert(not eval_post(post, samples))
+
+    del samples[0]
+    assert(eval_post(post, samples))
+
+    print("Passed tests")

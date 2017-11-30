@@ -10,8 +10,7 @@ class SamplingEvaluator(Evaluator):
 
     def compute_post(self, prog):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
-        samples = [(*sample, prog(*sample)) for sample in samples] # Include the output value
-        samples = [dict(zip(range(len(sample)), sample)) for sample in samples] # XXX requires the same indexing for the variable values as in the definitions of the events in post
+        trials = [(sample, prog(sample)) for sample in samples]
         counter = {event : 0 for event in self.post.probs}
         for sample in samples:
             for event,value in post.evaluate_prob_events(sample).items():
