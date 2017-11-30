@@ -26,6 +26,7 @@ class RepairModel(ABC):
         soln.post = False
         soln.error = 0
 
+    # constraints is a dictionary from the input tuple to the output value
     @abstractmethod
     def make_solution(self, constraints):
         pass
@@ -38,20 +39,13 @@ class RepairModel(ABC):
 # You can subclass this to add more functionality
 class Solution(object):
 
-    # there will be potentially very many of these objects in memory
+    # There will be potentially very many of these objects in memory
     __slots__ = 'prog','post','error'
 
     def __init__(self):
-        self.prog = None #an executable function; digits calls it with *sample as args
+        self.prog = None # An executable function; digits calls it with *sample as args
         self.post = False
         self.error = 0
-
-
-class Constraint:
-
-    def __init__(self, inputs, output):
-        self.inputs = inputs
-        self.output = output
 
 
 # Structures for Digits to use internally
@@ -96,12 +90,12 @@ class Digits:
         outputs = [True, False]
         samples = []
 
-        # can encode the tree as a map from the constraints to solutions
+        # Can encode the tree as a map from the constraints to solutions
         solutions = {}
         solutions[()] = repair_model.initial_solution(program)
 
-        # for determining what solutions remain to be computed
-        leaves = [()] #eventually stuff like (0,1,1,0) (0,1,1,1) etc
+        # For determining what solutions remain to be computed
+        leaves = [()] # Initally just the empty tuple; eventually stuff like (0,1,1,0) (0,1,1,1) etc
         worklist = _Queue()
 
         while len(samples) < n:
@@ -111,14 +105,16 @@ class Digits:
             while not worklist.empty():
                 leaf = worklist.pop()
                 leaves.remove(leaf)
+                # Explore this leaf's children
+                # Run the program at this leaf to propagate its solution to one child
                 val = solutions[leaf].prog(*samples[-1])
                 for value in outputs:
-                    if value == val: # we can propagate the solution
+                    if value == val: # We can use the same solution object
                         child = solutions[leaf]
                         self.leaves.append((*leaf, value))
                         self.solutions[(*leaf, value)] = child
-                    else: # we have to compute the solution
-                        child = repair_model.make_solution(solutions[leaf], Constraint(samples[-1], value))
+                    else: # We have to compute the solution
+                        child = repair_model.make_solution(dict(zip(samples, (*leaf, value))))
                         if child is not None:
                             self.leaves.append((*leaf, value))
                             self.solutions[(*leaf, value)] = child
