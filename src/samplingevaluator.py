@@ -3,9 +3,11 @@ from digits import *
 
 class SamplingEvaluator(Evaluator):
 
-    def __init__(self, sampler, post, num_samples=2000):
+    # post 's prob predicates need to take (Sample, output) tuples as input
+    def __init__(self, sampler, post, orig_prog, num_samples=2000):
         self.post = post
         self.sampler = sampler
+        self.orig_prog = orig_prog
         self.num_samples = num_samples
 
     def compute_post(self, prog):
@@ -15,8 +17,12 @@ class SamplingEvaluator(Evaluator):
         for sample in samples:
             for event,value in post.evaluate_prob_events(sample).items():
                 counter[event] += 1 if value else 0
-        estimates = {event : counter[event] / len(samples) for event in counter}
+        estimates = {event : counter[event] / self.num_samples for event in counter}
         return post.evaluate_expression(estimates)
 
     def compute_error(self, prog):
-        pass
+        samples = [self.sampler.next_sample() for j in range(self.num_samples)]
+        counter = 0
+        for sample in samples:
+            counter += 1 if prog(sample) == orig_prog(sample) else 0
+        return counter / self.num_samples
