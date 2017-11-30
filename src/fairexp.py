@@ -5,7 +5,7 @@ from probexp import ProbPost,_Event,_AExp,_BExp,_NodeType
 #   v_map is some dictionary {"<attribute name>" : <attribute value>}
 # constant is the 1-epsilon threshhold such that the condition is:
 #   ratio > constant
-def group_fairness(minority, hired, constant):
+def group_fairness(hired, minority, constant):
     
     m = _Event(exp_type=_NodeType.VAL, predicate=minority)
 
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     minority = lambda iopair : iopair[0].sex != "male"
     hired = lambda iopair : iopair[1]
 
-    post = group_fairness(minority, hired, 0.9)
+    post = group_fairness(hired, minority, 0.9)
 
     def eval_post(post, samples):
         counter = {event : 0 for event in post.probs}
