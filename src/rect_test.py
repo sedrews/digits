@@ -36,10 +36,10 @@ def precondition():
     rand = lambda : random() * 2 - 1
     return Sample(x=rand(), y=rand())
 
-postcondition = group_fairness(lambda iopair : iopair[1], lambda iopair : iopair[0].x > 0, 0.95)
+postcondition = group_fairness(lambda iopair : iopair[1] == 1, lambda iopair : iopair[0].x < 0, 0.95)
 
 repair_model = SMTRepair(sketch, template, out, Holes)
 evaluator = SamplingEvaluator(Sampler(precondition), postcondition, orig_prog)
 
 d = Digits(precondition, repair_model)
-d.repair(5, orig_prog, evaluator)
+solns = d.repair(10, orig_prog, evaluator)
