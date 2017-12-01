@@ -20,15 +20,24 @@ class SMTRepair(RepairModel):
 
         # Do actual synthesis work
         s = Solver()
+        conj_ids = {} # Map conjunctions (i.e. (Sample,output) pairs) to their ids for unsat cores
         for constraint in constraints.items():
-            s.add(self.constraint_to_z3(constraint))
+            #s.add(self.constraint_to_z3(constraint))
+            conj_id = 'p' + str(len(conj_ids)) # XXX this could collide with variable names
+            s.assert_and_track(self.constraint_to_z3(constraint), conj_id)
+            conj_ids[constraint] = conj_id
         if s.check() == z3.sat:
             # Build and return a Solution instance
             hole_values = self.holes_from_model(s.model()) # Do not inline this below
             soln = lambda inputs : self.sketch(inputs, hole_values)
             return Solution(prog=soln)
         else: #unsat
-            # Extract an unsat core TODO
+            # Extract an unsat core (when non-trivial)
+            if len(s.unsat_core()) < len(constraints):
+                core = [str(v) for v in s.unsat_core()]
+                # If core containts the id for constraint c, we want to include it in our core list
+                d = dict([constraint for constraint in constraints.items() if conj_ids[constraint] in core])
+                self.unsat_core_list.append(d)
             return None
 
     # constraint is a tuple of (Sample, output) where Sample is a named input tuple
@@ -38,7 +47,9 @@ class SMTRepair(RepairModel):
         return substitute(self.template, exp_pairs)
 
     def holes_from_model(self, model):
-        return self.Holes(*[model[Real(attr)].as_fraction() for attr in self.Holes._fields])
+        #return self.Holes(*[model[Real(attr)].as_fraction() for attr in self.Holes._fields])
+        return self.Holes(*[model.evaluate(Real(attr), model_completion=True).as_fraction() \
+                            for attr in self.Holes._fields])
 
     def core_matches(self, constraints):
         for core in self.unsat_core_list:

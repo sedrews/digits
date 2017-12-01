@@ -110,28 +110,23 @@ class Digits:
                 worklist.append(leaf)
             while not len(worklist) == 0:
                 leaf = worklist.pop()
-                print("  popped a leaf (" + str(len(worklist)) + " remaining)")
                 leaves.remove(leaf)
                 # Explore this leaf's children
                 # Run the program at this leaf to propagate its solution to one child
                 val = solutions[leaf].prog(samples[-1])
                 for value in self.outputs:
-                    print("    trying child " + str(value) + " -- ", end="")
                     if value == val: # We can use the same solution object
-                        print("propagating solution")
                         child = solutions[leaf]
                         leaves.append((*leaf, value))
                         solutions[(*leaf, value)] = child
                     else: # We have to compute the solution
                         child = self.repair_model.make_solution(dict(zip(samples, (*leaf, value))))
                         if child is not None:
-                            print("sat")
                             leaves.append((*leaf, value))
                             solutions[(*leaf, value)] = child
                             child.post = evaluator.compute_post(child.prog)
                             if child.post: # Only compute error for correct solutions
                                 child.error = evaluator.compute_error(child.prog)
-                        else:
-                            print("unsat")
         # TODO .values() is inefficient with multiplicity
-        return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
+        #return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
+        return solutions.values()
