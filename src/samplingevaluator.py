@@ -25,5 +25,5 @@ class SamplingEvaluator(Evaluator):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
         counter = 0
         for sample in samples:
-            counter += 1 if prog(sample) == self.orig_prog(sample) else 0
+            counter += 1 if prog(sample) != self.orig_prog(sample) else 0
         return counter / self.num_samples
