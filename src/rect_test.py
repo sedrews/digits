@@ -14,7 +14,13 @@ from fairexp import group_fairness
 from z3 import *
 
 from collections import namedtuple
-from random import random
+import random
+
+import sys
+if len(sys.argv) > 1:
+    random.seed(int(sys.argv[1]))
+else:
+    random.seed(0)
 
 Sample = namedtuple('Sample', 'x y')
 Holes = namedtuple('Holes', 'x_min x_max y_min y_max')
@@ -33,7 +39,7 @@ orig_holes = Holes(-.5,.7,0,1)
 orig_prog = lambda sample : sketch(sample, orig_holes)
 
 def precondition():
-    rand = lambda : random() * 2 - 1
+    rand = lambda : Fraction(random.random() * 2 - 1)
     return Sample(x=rand(), y=rand())
 
 postcondition = group_fairness(lambda iopair : iopair[1] == 1, lambda iopair : iopair[0].x < 0, 0.95)

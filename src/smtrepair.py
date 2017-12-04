@@ -30,6 +30,16 @@ class SMTRepair(RepairModel):
             # Build and return a Solution instance
             hole_values = self.holes_from_model(s.model()) # Do not inline this below
             soln = lambda inputs : self.sketch(inputs, hole_values)
+            try:
+                # Make sure the synthesized program is consistent with constraints
+                self.sanity_check(soln, constraints)
+            except AssertionError as e:
+                print("sanity check failed:")
+                print(e)
+                print("  constraints", constraints)
+                print("  holes", hole_values)
+                print("  (float holes)", self.Holes(*[float(val) for val in hole_values]))
+                exit(1)
             return Solution(prog=soln)
         else: #unsat
             # Extract an unsat core (when non-trivial)
@@ -61,3 +71,8 @@ class SMTRepair(RepairModel):
             if match:
                 return True
         return False
+
+    def sanity_check(self, soln, constraints):
+        for sample,output in constraints.items():
+            if soln(sample) != output:
+                assert soln(sample) == output, str(sample) + ' does not map to ' + str(output)
