@@ -105,7 +105,7 @@ class Digits:
 
         while len(samples) < n:
             samples.append(self.sampler.next_sample())
-            print("starting depth", len(samples))
+            print("starting depth", len(samples), "to split", len(leaves), "leaves")
             for leaf in leaves:
                 worklist.append(leaf)
             while not len(worklist) == 0:
