@@ -36,9 +36,11 @@ class SMTRepair(RepairModel):
             except AssertionError as e:
                 print("sanity check failed:")
                 print(e)
-                print("  constraints", constraints)
-                print("  holes", hole_values)
-                print("  (float holes)", self.Holes(*[float(val) for val in hole_values]))
+                print("constraints", constraints)
+                print("holes", hole_values)
+                print("(float holes)", self.Holes(*[float(val) for val in hole_values]))
+                print("solver", s)
+                print("model", s.model())
                 exit(1)
             return Solution(prog=soln)
         else: #unsat
