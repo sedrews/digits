@@ -1,8 +1,6 @@
 import ast
 import codegen
 from z3 import *
-from z3extra import *
-import rotationmath as rm
 # helpers
 
 
@@ -147,7 +145,7 @@ def makeBin(op, l, r):
     elif isPow(op):
         return l**r
     else:
-        assert(False and "Weird binary op")
+        assert False, "Weird binary op"
 
 
 def makeUnary(op, e):
@@ -158,7 +156,7 @@ def makeUnary(op, e):
     elif isNot(op):
         return Not(e)
     else:
-        assert(False and "Weird unary op")
+        assert False, "Weird unary op"
 
 
 def makeBool(op, *args):
@@ -167,7 +165,7 @@ def makeBool(op, *args):
     elif isOr(op):
         return Or(*args)
     else:
-        assert(False and "Weird bool op")
+        assert False, "Weird bool op"
 
 
 def makeCompare(op, l, r):
@@ -184,7 +182,7 @@ def makeCompare(op, l, r):
     elif isNotEq(op):
         return l != r
     else:
-        assert(False)
+        assert False
 
 
 class Encoder(ast.NodeVisitor):
@@ -194,7 +192,7 @@ class Encoder(ast.NodeVisitor):
 
     def visit_Module(self, node):
         fpop = node.body[0]
-        assert (fpop.name == 'popModel')
+        assert fpop.name == 'popModel'
 
         fprog = node.body[1]
 
@@ -241,7 +239,7 @@ class Encoder(ast.NodeVisitor):
                 continue
 
             else:
-                assert(False)
+                assert False
 
         res = simplify(And(*trans))
 
@@ -258,14 +256,14 @@ class Encoder(ast.NodeVisitor):
 
         fname = rhs.func.id
         
-        assert(zlhs not in self.vdist)
+        assert zlhs not in self.vdist
 
         if fname == 'gaussian':
             mean = evalAST(rhs.args[0])
             variance = evalAST(rhs.args[1])
             std_dev = RealVal(rm.sigfig_str(variance ** 0.5, 4))
 
-            assert(variance >= 0)
+            assert variance >= 0
 
             # We normalize all gaussian variables,
             # and let the program shift and scale them.
@@ -291,7 +289,7 @@ class Encoder(ast.NodeVisitor):
             l = evalAST(rhs.args[0])
             s = sum([a[2] for a in l])
             
-            assert(abs(s-1.0) <= 0.00001)
+            assert abs(s-1.0) <= 0.00001
 
             lbounds = [a_b_c[0] for a_b_c in step[1]]
             ubounds = [a_b_c1[1] for a_b_c1 in step[1]]
@@ -301,7 +299,7 @@ class Encoder(ast.NodeVisitor):
             return res
 
         else:
-            assert(False and "Supported distributions: gaussian")
+            assert False, "Supported distributions: gaussian"
 
         return True
 
@@ -324,7 +322,7 @@ class Encoder(ast.NodeVisitor):
             return makeBool(e.op, zexprs)
 
         elif isCompareOp(e):
-            assert(len(e.ops) == 1)
+            assert len(e.ops) == 1
 
             op = e.ops[0]
             zlhs = self.exprToZ3(e.left, d)
@@ -349,7 +347,7 @@ class Encoder(ast.NodeVisitor):
             return n
 
         else:
-            assert(False and ("Weird expression" + ast.dump(e)))
+            assert False, "Weird expression" + ast.dump(e)
 
     def refresh(self, d, v):
         # print "--------->", d[v], self.gd[v]
@@ -361,7 +359,7 @@ class Encoder(ast.NodeVisitor):
         #print "Assign", ast.dump(node)[0:10]
         #print "POPULATION MODEL: ", self.model
 
-        assert(len(node.targets) == 1)
+        assert len(node.targets) == 1
 
         lhs = node.targets[0].id
         rhs = node.value
@@ -383,7 +381,7 @@ class Encoder(ast.NodeVisitor):
         # print "Call", ast.dump(node)[0:10]
 
         fn = node.func.id
-        assert(len(node.args) == 1)
+        assert len(node.args) == 1
 
         if fn == 'assume':
             res = self.exprToZ3(node.args[0], d)
@@ -402,7 +400,7 @@ class Encoder(ast.NodeVisitor):
             return True
 
         else:
-            assert(False and "Unrecognizable function call")
+            assert False, "Unrecognizable function call"
 
     def createPhiNode(self, d, dt):
         # then branch constraints

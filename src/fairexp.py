@@ -66,9 +66,9 @@ if __name__ == "__main__":
                (Sample(40,   'male'), False),
                (Sample(26, 'female'),  True),
                (Sample(38, 'female'), False)]
-    assert(not eval_post(post, samples))
+    assert not eval_post(post, samples)
 
     del samples[0]
-    assert(eval_post(post, samples))
+    assert eval_post(post, samples)
 
     print("Passed tests")
