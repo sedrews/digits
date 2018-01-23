@@ -1,6 +1,20 @@
 import ast
 import codegen
 from z3 import *
+from collections import namedtuple
+
+
+def parse_fr(filename):
+    f = open(filename, "r")
+    node = ast.parse(f.read())
+    f.close()
+
+    e = Z3Encoder()
+    e.visit(SATransformer().visit(node))
+
+    ParsedFR = namedtuple('ParsedFR', ['vdist', 'model', 'program', 'sensitiveAttribute', 'fairnessTarget'])
+
+    return ParsedFR(e.vdist, e.model, e.program, e.sensitiveAttribute, e.fairnessTarget)
 
 
 # helpers
@@ -130,6 +144,9 @@ class SATransformer(ast.NodeTransformer):
         return [self.visit(s) for s in seq]
 
     def visit_If(self, node):
+
+        self.visit(node.test)
+
         before = self.live_index.copy()
         node.body = self.doSeq(node.body)
         after_if = self.live_index.copy()
@@ -232,7 +249,7 @@ class Z3Encoder(ast.NodeVisitor):
             mean = evalAST(rhs.args[0])
             variance = evalAST(rhs.args[1])
             assert variance > 0
-            self.vdist[name] = ('G', mean, variance)
+            self.vdist[Real(name)] = ('G', mean, variance)
             return True
 
         elif fname == 'step':
@@ -314,8 +331,11 @@ def exprToZ3(e):
         assert False, "Weird expression" + ast.dump(e)
 
 
+
 if __name__=="__main__":
 
+
+    from runTests import projectNonProbVars
     node = ast.parse('''
 def popModel():
     m = gaussian(0,100)
@@ -332,23 +352,16 @@ def F():
     fairnessTarget(rank < 5 or exp-rank > -5)
     return t
     ''')
-
-    e = Z3Encoder()
-    e.visit(SATransformer().visit(node))
-    #print("ENCODER:\n", e)
+    e = Encoder()
+    e.visit(node)
+    print("ENCODER:\n", e)
     print("MODEL:\n", e.model)
     print("PROGRAM:\n", e.program)
-    #phi = And(e.model, e.program, e.sensitiveAttribute, e.fairnessTarget)
+    phi = And(e.model, e.program, e.sensitiveAttribute, e.fairnessTarget)
     pvars = [x for x in e.vdist]
     print("VDIST:\n", e.vdist)
-    #print("PHI:\n", phi)
-    #print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
-
-    # TODO make something like the following
-    #print("PRECONDITION:\n", e.pre) # A string representation of an executable -- see func.py for example
-    #print("PROGRAM (py):\n", e.prog) # A string representation of an executable
-    #print("PROGRAM (z3):\n", e.phih) # A z3 formula representating the prog (not including pre)
-    #print("POSTCONDITION:\n", e.post) # A string representation of an executable
+    print("PHI:\n", phi)
+    print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
 
 # print codegen.to_source(node)
 
