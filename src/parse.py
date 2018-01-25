@@ -2,6 +2,7 @@ import ast
 import codegen
 from z3 import *
 from collections import namedtuple
+from probs import prob_dict
 
 
 def parse_fr(filename):
@@ -9,12 +10,14 @@ def parse_fr(filename):
     node = ast.parse(f.read())
     f.close()
 
-    e = Z3Encoder()
-    e.visit(SATransformer().visit(node))
+    pre,D,post = separate_FR_AST(node)
+    pre_exec = process_pre_AST(pre)
+    D_exec,hole_defaults,D_z3,z3_vars = process_D_AST(D)
+    post_exec = process_post_AST(post)
 
-    ParsedFR = namedtuple('ParsedFR', ['vdist', 'model', 'program', 'sensitiveAttribute', 'fairnessTarget'])
+    ParsedFR = namedtuple('ParsedFR', ['pre_exec', 'D_exec', 'hole_defaults', 'D_z3', 'z3_vars', 'post_exec'])
 
-    return ParsedFR(e.vdist, e.model, e.program, e.sensitiveAttribute, e.fairnessTarget)
+    return ParsedFR(pre_exec, D_exec, holde_defaults, D_z3, z3_vars, post_exec)
 
 
 # helpers
@@ -135,8 +138,12 @@ class SATransformer(ast.NodeTransformer):
         d.visit(node)
         self.live_index = d.vdict
         
-        for func in node.body:
-            func.body = self.doSeq(func.body)
+        assert len(node.body) == 1
+        func = node.body[0]
+        self.live_inputs = [a.arg for a in func.args.args]
+        for name in self.live_inputs:
+            self.live_index[name] = -1
+        func.body = self.doSeq(func.body)
 
         return node
 
@@ -160,11 +167,11 @@ class SATransformer(ast.NodeTransformer):
             self.live_index[name] = max(after_if[name], after_else[name])
             # Add the Phi functions
             if after_if[name] < self.live_index[name]:
-                node.body.append(ast.Assign(targets=[ast.Name(id=self.append_index(name))],    
-                                            value=ast.Name(id=name+"_"+str(after_if[name]))))
+                node.body.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index[name]))],    
+                                            value=ast.Name(id=self.app_ind(name,after_if[name]))))
             if after_else[name] < self.live_index[name]:
-                node.orelse.append(ast.Assign(targets=[ast.Name(id=self.append_index(name))],    
-                                              value=ast.Name(id=name+"_"+str(after_else[name]))))
+                node.orelse.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index[name]))],    
+                                              value=ast.Name(id=self.app_ind(name,after_else[name]))))
 
         return node
 
@@ -181,47 +188,39 @@ class SATransformer(ast.NodeTransformer):
         return node
 
     def visit_Name(self, node):
-        #return ast.copy_location(
-        #        ast.Name(id=self.append_index(node.id), ctx=ast.Load()),
-        #        node)
-        return ast.Name(id=self.append_index(node.id))
+        return ast.Name(id=self.app_ind(node.id,self.live_index[node.id]))
 
-    def append_index(self, name):
-        if name not in self.live_index:
-            self.live_index[name] = 0
-        return name + "_" + str(self.live_index[name])
+    def app_ind(self, name, ind):
+        if ind == -1:
+            return name
+        else:
+            return name + "_" + str(ind)
 
 
 # Essentially syntactic conversion of an SA-form Python program
 # to a z3 formula
 class Z3Encoder(ast.NodeVisitor):
 
-    def __init__(self):
-        self.vdist = {}
-        
-        self.sensitiveAttribute = None
-        self.fairnessTarget = None
-
-        self.model = None
-        self.program = None
+    def __init__(self, inputs=None, holes=None):
+        self.phi = None
+        self.holes = holes if holes is not None else []
+        self.inputs = inputs if inputs is not None else []
+        self.retvar = None
+        self.othervars = []
 
     def generic_visit(self, node):
         assert False, "generic visit on node " + ast.dump(node)
 
-    # ast.parse returns an ast.Module object
     def visit_Module(self, node):
-        # The body of node should be a sequence:
-        # popModel, F
-        assert len(node.body) == 2
-        fpop = node.body[0]
-        fprog = node.body[1]
-        assert fpop.name == 'popModel' and fprog.name == 'F'
+        assert len(node.body) == 1
+        f = node.body[0]
+        assert f.name == 'D'
 
-        self.model = self.doSeq(fpop.body)
-        self.model = simplify(self.model)
+        self.phi = self.doSeq(f.body)
+        self.phi = simplify(self.phi)
 
-        self.program = self.doSeq(fprog.body)
-        self.program = simplify(self.program)
+        if self.retvar in self.othervars:
+            self.othervars.remove(self.retvar)
 
     def doSeq(self, seq):
         trans = [self.visit(s) for s in seq]
@@ -233,42 +232,16 @@ class Z3Encoder(ast.NodeVisitor):
         lhs = node.targets[0].id
         rhs = node.value
 
-        if isCall(rhs):
-            # TODO Ensure that the call is to a supported prob dist
-            return self.probAssign(lhs, rhs)
-
         zrhs = exprToZ3(rhs)
         zlhs = Real(lhs)
-        return zlhs == zrhs
 
-    # Store the probability distribution information
-    def probAssign(self, name, rhs):
-        fname = rhs.func.id
-        
-        if fname == 'gaussian':
-            mean = evalAST(rhs.args[0])
-            variance = evalAST(rhs.args[1])
-            assert variance > 0
-            self.vdist[Real(name)] = ('G', mean, variance)
-            return True
-
-        elif fname == 'step':
-            step = ('S', evalAST(rhs.args[0]))
-            self.vdist[name] = step
-
-            # sum of probs == 1
-            l = evalAST(rhs.args[0])
-            s = sum([a[2] for a in l])
-            assert abs(s-1.0) <= 0.00001
-
-            lbounds = [a_b_c[0] for a_b_c in step[1]]
-            ubounds = [a_b_c1[1] for a_b_c1 in step[1]]
-            res = And(Real(name) >= min(lbounds), Real(name) <= max(ubounds))
-
-            return res
-
+        if lhs in self.holes:
+            pass
         else:
-            assert False, "Supported distributions: gaussian, step"
+            if lhs not in self.othervars:
+                self.othervars.append(lhs)
+
+        return zlhs == zrhs
 
     def visit_If(self, node):
         zcond = exprToZ3(node.test)
@@ -280,24 +253,23 @@ class Z3Encoder(ast.NodeVisitor):
     # so these are always calls
     def visit_Expr(self, node):
         assert isinstance(node.value, ast.Call), "Unexpected expression"
-        return self.visit(node.value)
+        return True
 
-    # We handle calls to prob vars in visit_Assign,
-    # so these are always the program annotations
+    # These are always the event annotations
     def visit_Call(self, node):
         fn = node.func.id
         assert len(node.args) == 1
 
-        if fn == 'sensitiveAttribute':
-            self.sensitiveAttribute = exprToZ3(node.args[0])
-        elif fn == 'fairnessTarget':
-            self.fairnessTarget = exprToZ3(node.args[0])
+        if fn == 'event':
+            pass
         else:
             assert False, "Unrecognizable function call"
 
         return True
 
     def visit_Return(self, node):
+        assert isinstance(node.value, ast.Name), "Must return an identifier (bind any expression in a previous line)"
+        self.retvar = node.value.id
         return True
 
 
@@ -330,38 +302,154 @@ def exprToZ3(e):
     else:
         assert False, "Weird expression" + ast.dump(e)
 
+def separate_FR_AST(node):
+    # Return pre, D, and post AST objects
+    assert isinstance(node, ast.Module)
+    assert len(node.body) == 3
+    pre = node.body[0]
+    D = node.body[1]
+    post = node.body[2]
+    assert pre.name == 'pre' and D.name == 'D' and post.name == 'post'
+    return ast.Module(body=[pre]), ast.Module(body=[D]), ast.Module(body=[post])
 
+def process_pre_AST(node):
+    # Call eval, ensuring our support prob dists are in globals namespace
+    # Return the executable
+    c = compile(node, '<string>', mode='exec')
+    m = {}
+    eval(c, prob_dict, m)
+    return m['pre']
+
+def process_D_AST(node):
+    # Replace the AST Hole() calls with fresh variables
+    # For executable:
+    #   change args from (*inputs) to (*inputs, *holevals, eventfunc)
+    #   evaluate this function
+    #   wrap (statically) in a function : (*inputs, *holevals) -> res,event_map
+    # For z3:
+    #   single-assignment transformation
+    #   syntactic z3 conversion
+    # Return the following:
+    #   the z3 formula and the input, ouput, hole, and intermediary variables
+    #   the executable and the default hole values
+
+    inputs = [a.arg for a in node.body[0].args.args]
+
+    h = HoleCallTransformer()
+    h.visit(node)
+
+    class ArgTransformer(ast.NodeTransformer):
+        def visit_FunctionDef(self, node):
+            assert node.name == 'D'
+            node.args.args = [ast.arg(arg=x) for x in ["event"] + h.holes] + node.args.args
+            return node
+    ArgTransformer().visit(node)
+
+    ast.fix_missing_locations(node)
+
+    c = compile(node, '<string>', mode='exec')
+    m = {}
+    eval(c, None, m)
+    def wrapped(*xs):
+        d = {}
+        def event(event_name, bool_val):
+            assert event_name not in d
+            d[event_name] = bool_val
+        ret = m['D'](event, *xs)
+        return ret, d
+
+    z = Z3Encoder(inputs, h.holes)
+    z.visit(SATransformer().visit(node))
+    
+    ZT = namedtuple("Z3_vars", ['inputs', 'holes', 'output', 'intermediary'])
+    zt = ZT([Real(i) for i in z.inputs], [Real(i) for i in z.holes], Real(z.retvar), [Real(i) for i in z.othervars])
+    return wrapped,(h.holes, h.hole_map),z.phi,zt
+
+
+class HoleCallTransformer(ast.NodeTransformer):
+
+    def __init__(self):
+        super().__init__()
+        self.hole_map = {}
+        self.holes = []
+
+    def next_name(self):
+        return "__hole_" + str(len(self.holes))
+
+    def visit_Module(self, node):
+        assert len(node.body) == 1
+        func = node.body[0]
+        func.body = self.doSeq(func.body)
+
+        return node
+
+    def doSeq(self, seq):
+        return [self.visit(s) for s in seq]
+
+    def visit_Call(self, node):
+        if node.func.id == "Hole":
+            assert len(node.args) == 1
+            arg = evalAST(node.args[0])
+            name = self.next_name()
+            self.holes.append(name)
+            self.hole_map[name] = arg
+            return ast.Name(id=name, ctx=ast.Load())
+        else:
+            return node
+
+
+def process_post_AST(node):
+    # eval, potentially including some Pr() : joint_counts_dict -> prob in the global namespace? TODO
+    # Return that function
+    c = compile(node, '<string>', mode='exec')
+    m = {}
+    eval(c, None, m)
+    return m['post']
 
 if __name__=="__main__":
 
-
-    from runTests import projectNonProbVars
     node = ast.parse('''
-def popModel():
-    m = gaussian(0,100)
-    rank = gaussian(25,25)
-    exp = gaussian(10,9)
+def pre():
+    x = step([(-1, 1, 1)])
+    y = step([(-1, 1, 1)])
+    return x, y
 
-    if m < 10:
-        rank = rank + 5
+def D(x, y):
+    if Hole(-.5) < x and x < Hole(.7) and Hole(0) < y and y < Hole(1):
+        ret = 1
+    else:
+        ret = 0
+    event("neg_x", x < 0)
+    event("in_box", ret == 1)
+    return ret
 
-    sensitiveAttribute(m > 10)
-
-def F():
-    t = 1.0 * m + 3.0 * rank + -1*exp
-    fairnessTarget(rank < 5 or exp-rank > -5)
-    return t
+def post(Pr):
+    num = Pr({"in_box" : True, "neg_x" : True}) / Pr({"neg_x" : True})
+    den = Pr({"in_box" : True, "neg_x" : False}) / Pr({"neg_x" : False})
+    ratio = num / den
+    return ratio > 0.95
     ''')
-    e = Encoder()
-    e.visit(node)
-    print("ENCODER:\n", e)
-    print("MODEL:\n", e.model)
-    print("PROGRAM:\n", e.program)
-    phi = And(e.model, e.program, e.sensitiveAttribute, e.fairnessTarget)
-    pvars = [x for x in e.vdist]
-    print("VDIST:\n", e.vdist)
-    print("PHI:\n", phi)
-    print("NONPROBVARS PROJECTED:\n", projectNonProbVars(phi,pvars,False)) 
 
-# print codegen.to_source(node)
+    pre,D,post = separate_FR_AST(node)
+    pre_exec = process_pre_AST(pre)
+    for i in range(100):
+        print(pre_exec())
+    D_exec,hole_defaults,D_z3,z3_vars = process_D_AST(D)
+    print("D_z3?")
+    print(D_z3)
+    print("z3_vars?", z3_vars)
+    print("hole_defaults", hole_defaults)
+    print("some D_exec trials")
+    for i in range(10):
+        inputs = pre_exec()
+        outputs = D_exec(*[hole_defaults[1][h] for h in hole_defaults[0]], *inputs)
+        print("mapped", inputs, "to", outputs)
+    post_exec = process_post_AST(post)
 
+    # TODO error detection:
+    # Prob sampling should only be in pre
+    # Ensure #args in D matches #returns in pre
+    # Ensure the variable names introduced in D for holes don't have collisions
+    # event() should only be in D
+    # Ensure all events are event(string literal, bool exp)
+    # Ensure post uses only defined events
