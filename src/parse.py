@@ -17,7 +17,7 @@ def parse_fr(filename):
 
     ParsedFR = namedtuple('ParsedFR', ['pre_exec', 'D_exec', 'hole_defaults', 'D_z3', 'z3_vars', 'post_exec'])
 
-    return ParsedFR(pre_exec, D_exec, holde_defaults, D_z3, z3_vars, post_exec)
+    return ParsedFR(pre_exec, D_exec, hole_defaults, D_z3, z3_vars, post_exec)
 
 
 # helpers
