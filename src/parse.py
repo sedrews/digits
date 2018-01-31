@@ -353,10 +353,16 @@ def process_D_AST(node):
     def wrapped(*xs):
         d = {}
         def event(event_name, bool_val):
+            # It should be an invariant that each event is encountered
+            # exactly once during the program execution
+            # (otherwise semantics don't really make sense).
+            #TODO make sure that if the event isn't encountered that something appropriate happens
             assert event_name not in d
             d[event_name] = bool_val
         ret = m['D'](event, *xs)
         return ret, d
+    #XXX if this function is called a second time, will the previously
+    #    returned wrapped function (incorrectly) use the new m['D']?
 
     z = Z3Encoder(inputs, h.holes)
     z.visit(SATransformer().visit(node))
