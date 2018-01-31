@@ -6,6 +6,7 @@
 #     x values to be as likely to be in the rectangle as non-positive
 #     (i.e. the rectangles should have y=0 intersecting close to their center)
 
+from parse import parse_fr
 from digits import Digits, Sampler
 from smtrepair import SMTRepair
 from samplingevaluator import SamplingEvaluator
@@ -16,52 +17,39 @@ from z3 import *
 from collections import namedtuple
 import random
 
-import sys
-if len(sys.argv) > 1:
-    random.seed(int(sys.argv[1]))
-else:
-    random.seed(0)
 
-Sample = namedtuple('Sample', 'x y')
-Holes = namedtuple('Holes', 'H1 H2 H3 H4')
-def sketch(sample, holes):
-    if holes.H1 < sample.x and sample.x < holes.H2 and holes.H3 < sample.y and sample.y < holes.H4:
+prog_string='''
+def pre():
+    x = step([(-1, 1, 1)])
+    y = step([(-1, 1, 1)])
+    return x, y
+
+def D(x, y):
+    if Hole(-.5) < x and x < Hole(.7) and Hole(0) < y and y < Hole(1):
         ret = 1
     else:
         ret = 0
+    event("neg_x", x < 0)
+    event("in_box", ret == 1)
     return ret
-x,y = Reals('x y')
-H1,H2,H3,H4 = Reals('H1 H2 H3 H4')
-ret_0, ret_1, ret_2 = Reals('ret_0 ret_1 ret_2')
-phi = And(Implies(And(H1 < x, x < H2, H3 < y, y < H4), \
-                  And(ret_0 == 1, ret_2 == ret_0)), \
-          Implies(Not(And(H1 < x, x < H2, H3 < y, y < H4)), \
-                  And(ret_1 == 0, ret_2 == ret_1)))
-phi = Exists([ret_0, ret_1], phi)
 
-hole_defaults = Holes(-.5, .7, 0, 1)
-orig_prog = lambda sample : sketch(sample, hole_defaults)
-
-def precondition():
-    rand = lambda : Fraction(random.random() * 2 - 1)
-    return Sample(x=rand(), y=rand())
-
-post = ProbPost()
-post.preds = {"hired" : lambda iopair : iopair[1] == 1, \
-              "minority" : lambda iopair : iopair[0].x < 0}
-post.events = [Event({"hired" : True, "minority" : True}), \
-               Event({"minority" : True}), \
-               Event({"hired" : True, "minority" : False}), \
-               Event({"minority" : False})]
-def group_fair(pr_map):
-    num = pr_map[Event({"hired" : True, "minority" : True})] / pr_map[Event({"minority" : True})]
-    den = pr_map[Event({"hired" : True, "minority" : False})] / pr_map[Event({"minority" : False})]
+def post(Pr):
+    num = Pr({"in_box" : True, "neg_x" : True}) / Pr({"neg_x" : True})
+    den = Pr({"in_box" : True, "neg_x" : False}) / Pr({"neg_x" : False})
     ratio = num / den
     return ratio > 0.95
-post.func = group_fair
+'''
 
-repair_model = SMTRepair(sketch, phi, ret_2, Holes)
-evaluator = SamplingEvaluator(Sampler(precondition), post, orig_prog)
+p = parse_fr(prog_string)
 
-d = Digits(precondition, repair_model)
+Holes = namedtuple('Holes', p.hole_defaults[0])
+H_default = Holes(**p.hole_defaults[1])
+
+repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes)
+
+orig_prog = lambda *inputs : p.D_exec(*H_default, *inputs)
+
+evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
+
+d = Digits(p.pre_exec, repair_model)
 solns = d.repair(10, orig_prog, evaluator)

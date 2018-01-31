@@ -4,9 +4,10 @@ from z3 import *
 
 class SMTRepair(RepairModel):
 
-    def __init__(self, sketch, template, output_variable, Holes):
+    def __init__(self, sketch, template, input_variables, output_variable, Holes):
         self.sketch = sketch
         self.template = template
+        self.input_variables = input_variables
         self.output_variable = output_variable
         self.Holes = Holes
 
@@ -29,7 +30,8 @@ class SMTRepair(RepairModel):
         if s.check() == z3.sat:
             # Build and return a Solution instance
             hole_values = self.holes_from_model(s.model()) # Do not inline this below
-            soln = lambda inputs : self.sketch(inputs, hole_values)
+            #print("made soln with holes", self.Holes(*[float(val) for val in hole_values]))
+            soln = lambda *inputs : self.sketch(*hole_values, *inputs)
             try:
                 # Make sure the synthesized program is consistent with constraints
                 self.sanity_check(soln, constraints)
@@ -47,15 +49,15 @@ class SMTRepair(RepairModel):
             # Extract an unsat core (when non-trivial)
             if len(s.unsat_core()) < len(constraints):
                 core = [str(v) for v in s.unsat_core()]
-                # If core containts the id for constraint c, we want to include it in our core list
+                # If core contains the id for constraint c, we want to include it in our core list
                 d = dict([constraint for constraint in constraints.items() if conj_ids[constraint] in core])
                 self.unsat_core_list.append(d)
             return None
 
-    # constraint is a tuple of (Sample, output) where Sample is a named input tuple
+    # constraint is a tuple of (Sample, output) where Sample is an input tuple
     def constraint_to_z3(self, constraint):
-        exp_pairs = [(Real(attr), RealVal(getattr(constraint[0], attr))) for attr in constraint[0]._fields]
-        exp_pairs += [(self.output_variable,RealVal(constraint[1]))]
+        exp_pairs = [(self.input_variables[i], RealVal(constraint[0][i])) for i in range(len(constraint))]
+        exp_pairs += [(self.output_variable, RealVal(constraint[1]))]
         return substitute(self.template, exp_pairs)
 
     def holes_from_model(self, model):
@@ -76,5 +78,5 @@ class SMTRepair(RepairModel):
 
     def sanity_check(self, soln, constraints):
         for sample,output in constraints.items():
-            if soln(sample) != output:
-                assert soln(sample) == output, str(sample) + ' does not map to ' + str(output)
+            if soln(*sample)[0] != output:
+                assert soln(*sample)[0] == output, str(sample) + ' does not map to ' + str(output)

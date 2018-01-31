@@ -72,7 +72,7 @@ class Sampler:
     def __init__(self, prob_prog):
         self.prob_prog = prob_prog
 
-    # This should return a named tuple
+    # This should return a named tuple XXX not anymore? still need to be tuples i guess
     def next_sample(self):
         return self.prob_prog()
 
@@ -113,7 +113,7 @@ class Digits:
                 leaves.remove(leaf)
                 # Explore this leaf's children
                 # Run the program at this leaf to propagate its solution to one child
-                val = solutions[leaf].prog(samples[-1])
+                val = solutions[leaf].prog(*samples[-1]) # Note [] has precedence over *
                 for value in self.outputs:
                     if value == val: # We can use the same solution object
                         child = solutions[leaf]

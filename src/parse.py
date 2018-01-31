@@ -5,10 +5,8 @@ from collections import namedtuple
 from probs import prob_dict
 
 
-def parse_fr(filename):
-    f = open(filename, "r")
-    node = ast.parse(f.read())
-    f.close()
+def parse_fr(code_string):
+    node = ast.parse(code_string)
 
     pre,D,post = separate_FR_AST(node)
     pre_exec = process_pre_AST(pre)
@@ -318,7 +316,11 @@ def process_pre_AST(node):
     c = compile(node, '<string>', mode='exec')
     m = {}
     eval(c, prob_dict, m)
-    return m['pre']
+    pre = m['pre']
+    def wrapped():
+        inputs = pre()
+        return tuple(Fraction(val) for val in inputs)
+    return wrapped
 
 def process_D_AST(node):
     # Replace the AST Hole() calls with fresh variables
@@ -350,6 +352,7 @@ def process_D_AST(node):
     c = compile(node, '<string>', mode='exec')
     m = {}
     eval(c, None, m)
+    D = m['D']
     def wrapped(*xs):
         d = {}
         def event(event_name, bool_val):
@@ -359,17 +362,19 @@ def process_D_AST(node):
             #TODO make sure that if the event isn't encountered that something appropriate happens
             assert event_name not in d
             d[event_name] = bool_val
-        ret = m['D'](event, *xs)
+        ret = D(event, *xs)
         return ret, d
     #XXX if this function is called a second time, will the previously
     #    returned wrapped function (incorrectly) use the new m['D']?
+    #    Similar concern in process_pre_AST
 
     z = Z3Encoder(inputs, h.holes)
     z.visit(SATransformer().visit(node))
     
     ZT = namedtuple("Z3_vars", ['inputs', 'holes', 'output', 'intermediary'])
     zt = ZT([Real(i) for i in z.inputs], [Real(i) for i in z.holes], Real(z.retvar), [Real(i) for i in z.othervars])
-    return wrapped,(h.holes, h.hole_map),z.phi,zt
+    phi = z.phi if len(zt.intermediary) == 0 else Exists(zt.intermediary, z.phi)
+    return wrapped,(h.holes, h.hole_map),phi,zt
 
 
 class HoleCallTransformer(ast.NodeTransformer):
@@ -380,7 +385,7 @@ class HoleCallTransformer(ast.NodeTransformer):
         self.holes = []
 
     def next_name(self):
-        return "__hole_" + str(len(self.holes))
+        return "x__hole_" + str(len(self.holes))
 
     def visit_Module(self, node):
         assert len(node.body) == 1
