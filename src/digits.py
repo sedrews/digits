@@ -128,5 +128,5 @@ class Digits:
                             if child.post: # Only compute error for correct solutions
                                 child.error = evaluator.compute_error(child.prog)
         # TODO .values() is inefficient with multiplicity
-        #return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
-        return solutions.values()
+        return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
+        #return solutions.values()

@@ -52,4 +52,8 @@ orig_prog = lambda *inputs : p.D_exec(*H_default, *inputs)
 evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
 
 d = Digits(p.pre_exec, repair_model)
-solns = d.repair(10, orig_prog, evaluator)
+soln = d.repair(10, orig_prog, evaluator)
+
+print("best repair:")
+print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
+print("error", soln.error)

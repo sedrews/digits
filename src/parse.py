@@ -127,7 +127,7 @@ def init_dict(node):
 
 # Convert the AST to (not-static) single-assignment form
 # This facilitates a direct conversion to logical formulae
-class SATransformer(ast.NodeTransformer):
+class SATransformer(ast.NodeTransformer): #XXX probably does not support x ++ 1 etc
 
     # This is specialized for our .fr files where we assume
     # all variables in all functions use the same namespace

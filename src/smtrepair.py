@@ -2,6 +2,13 @@ from digits import *
 from z3 import *
 
 
+class SMTSolution(Solution):
+    __slots__ = 'holes'
+    def __init__(self, prog=None, post=None, error=None, holes=None):
+        super().__init__(prog, post, error)
+        self.holes = holes
+
+
 class SMTRepair(RepairModel):
 
     def __init__(self, sketch, template, input_variables, output_variable, Holes):
@@ -44,7 +51,7 @@ class SMTRepair(RepairModel):
                 print("solver", s)
                 print("model", s.model())
                 exit(1)
-            return Solution(prog=soln)
+            return SMTSolution(prog=soln, holes=hole_values)
         else: #unsat
             # Extract an unsat core (when non-trivial)
             if len(s.unsat_core()) < len(constraints):
