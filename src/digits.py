@@ -113,7 +113,7 @@ class Digits:
                 leaves.remove(leaf)
                 # Explore this leaf's children
                 # Run the program at this leaf to propagate its solution to one child
-                val = solutions[leaf].prog(*samples[-1]) # Note [] has precedence over *
+                val = solutions[leaf].prog(*samples[-1])[0] # Note [] has precedence over *
                 for value in self.outputs:
                     if value == val: # We can use the same solution object
                         child = solutions[leaf]
