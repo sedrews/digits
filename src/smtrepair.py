@@ -63,9 +63,10 @@ class SMTRepair(RepairModel):
 
     # constraint is a tuple of (Sample, output) where Sample is an input tuple
     def constraint_to_z3(self, constraint):
-        exp_pairs = [(self.input_variables[i], RealVal(constraint[0][i])) for i in range(len(constraint))]
+        exp_pairs = [(self.input_variables[i], RealVal(constraint[0][i])) for i in range(len(constraint[0]))]
         exp_pairs += [(self.output_variable, RealVal(constraint[1]))]
-        return substitute(self.template, exp_pairs)
+        sub = substitute(self.template, exp_pairs)
+        return sub
 
     def holes_from_model(self, model):
         #return self.Holes(*[model[Real(attr)].as_fraction() for attr in self.Holes._fields])
@@ -85,5 +86,5 @@ class SMTRepair(RepairModel):
 
     def sanity_check(self, soln, constraints):
         for sample,output in constraints.items():
-            if soln(*sample)[0] != output:
-                assert soln(*sample)[0] == output, str(sample) + ' does not map to ' + str(output)
+            o = soln(*sample)[0]
+            assert o == output, str(sample) + ' does not map to ' + str(output) + '; instead ' + str(o)
