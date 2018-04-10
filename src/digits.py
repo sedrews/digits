@@ -79,54 +79,47 @@ class Sampler:
 
 # Digits itself
 
+def digits(precondition, program, repair_model, evaluator, outputs=[0,1], n=10):
+    if isinstance(precondition, Sampler):
+        sampler = precondition
+    else:
+        sampler = Sampler(precondition)
 
-class Digits:
-    
-    # Precondition can either be an function that returns a named tuple
-    # or an instance of Sampler
-    def __init__(self, precondition, repair_model, outputs=[0,1]):
-        self.repair_model = repair_model
-        if isinstance(precondition, Sampler):
-            self.sampler = precondition
-        else:
-            self.sampler = Sampler(precondition)
-        self.outputs = outputs
+    samples = []
 
-    def repair(self, n, program, evaluator):
-        samples = []
+    # Can encode the tree as a map from the constraints to solutions
+    solutions = {}
+    solutions[()] = repair_model.initial_solution(program)
 
-        # Can encode the tree as a map from the constraints to solutions
-        solutions = {}
-        solutions[()] = self.repair_model.initial_solution(program)
+    # For determining what solutions remain to be computed
+    leaves = [()] # Initally just the empty tuple (starting program); eventually (0,1,1,0) (0,1,1,1) etc
+    worklist = _Queue()
 
-        # For determining what solutions remain to be computed
-        leaves = [()] # Initally just the empty tuple; eventually stuff like (0,1,1,0) (0,1,1,1) etc
-        worklist = _Queue()
-
-        while len(samples) < n:
-            samples.append(self.sampler.next_sample())
-            print("starting depth", len(samples), "to split", len(leaves), "leaves")
-            for leaf in leaves:
-                worklist.append(leaf)
-            while not len(worklist) == 0:
-                leaf = worklist.pop()
-                leaves.remove(leaf)
-                # Explore this leaf's children
-                # Run the program at this leaf to propagate its solution to one child
-                val = solutions[leaf].prog(*samples[-1])[0] # Note [] has precedence over *
-                for value in self.outputs:
-                    if value == val: # We can use the same solution object
-                        child = solutions[leaf]
+    while len(samples) < n:
+        samples.append(sampler.next_sample())
+        print("starting depth", len(samples), "to split", len(leaves), "leaves")
+        for leaf in leaves:
+            worklist.append(leaf)
+        while not len(worklist) == 0:
+            leaf = worklist.pop()
+            leaves.remove(leaf)
+            # Explore this leaf's children
+            # Run the program at this leaf to propagate its solution to one child
+            val = solutions[leaf].prog(*samples[-1])[0] # Note [] has precedence over *
+            for value in outputs:
+                if value == val: # We can use the same solution object
+                    child = solutions[leaf]
+                    leaves.append((*leaf, value))
+                    solutions[(*leaf, value)] = child
+                else: # We have to compute the solution
+                    child = repair_model.make_solution(dict(zip(samples, (*leaf, value))))
+                    if child is not None:
                         leaves.append((*leaf, value))
                         solutions[(*leaf, value)] = child
-                    else: # We have to compute the solution
-                        child = self.repair_model.make_solution(dict(zip(samples, (*leaf, value))))
-                        if child is not None:
-                            leaves.append((*leaf, value))
-                            solutions[(*leaf, value)] = child
-                            child.post = evaluator.compute_post(child.prog)
-                            if child.post: # Only compute error for correct solutions
-                                child.error = evaluator.compute_error(child.prog)
-        # TODO .values() is inefficient with multiplicity
-        return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
-        #return solutions.values()
+                        child.post = evaluator.compute_post(child.prog)
+                        if child.post: # Only compute error for correct solutions
+                            child.error = evaluator.compute_error(child.prog)
+    # TODO .values() is inefficient with multiplicity
+    return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
+    #return solutions.values()
+

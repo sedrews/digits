@@ -7,7 +7,7 @@
 #     (i.e. the rectangles should have y=0 intersecting close to their center)
 
 from parse import parse_fr
-from digits import Digits, Sampler
+from digits import digits, Sampler
 from smtrepair import SMTRepair
 from samplingevaluator import SamplingEvaluator
 from probpost import ProbPost, Event
@@ -51,8 +51,7 @@ orig_prog = lambda *inputs : p.D_exec(*H_default, *inputs)
 
 evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
 
-d = Digits(p.pre_exec, repair_model)
-soln = d.repair(10, orig_prog, evaluator)
+soln = digits(p.pre_exec, orig_prog, repair_model, evaluator)
 
 print("best repair:")
 print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
