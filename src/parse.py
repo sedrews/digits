@@ -1,5 +1,4 @@
 import ast
-import codegen
 import astor
 from z3 import *
 from collections import namedtuple
@@ -84,7 +83,7 @@ def isName(node):
     return name(node) == 'Name'
 
 def evalAST(node):
-    node = codegen.to_source(node)
+    node = astor.to_source(node)
     return eval(node)
 
 def makeBin(op, l, r):
