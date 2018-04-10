@@ -1,5 +1,6 @@
 import ast
 import codegen
+import astor
 from z3 import *
 from collections import namedtuple
 from probs import prob_dict
@@ -112,35 +113,19 @@ def makeCompare(op, l, r):
     else: assert False, "Weird compare"
 
 
-# A visitor class to gather all identifiers (used for SSA)
-class VDict(ast.NodeVisitor):
-    def __init__(self):
-        self.vdict = {}
-    def visit_Name(self, node):
-        # print(ast.dump(node))
-        self.vdict[node.id] = 0
-def init_dict(node):
-    v = VDict()
-    v.visit(node)
-    return v.vdict
-
-
 # Convert the AST to (not-static) single-assignment form
 # This facilitates a direct conversion to logical formulae
-class SATransformer(ast.NodeTransformer): #XXX probably does not support x ++ 1 etc
+class SATransformer(ast.NodeTransformer): #XXX probably does not support x += 1 etc
 
-    # This is specialized for our .fr files where we assume
-    # all variables in all functions use the same namespace
+    # The module should be a single function (we assert so, in fact)
     def visit_Module(self, node):
-        d = VDict()
-        d.visit(node)
-        self.live_index = d.vdict
+        self.live_index = {} 
         
         assert len(node.body) == 1
         func = node.body[0]
         self.live_inputs = [a.arg for a in func.args.args]
         for name in self.live_inputs:
-            self.live_index[name] = -1
+            self.live_index[name] = -1 # For identifiers as arguments, use base name before name_0
         func.body = self.doSeq(func.body)
 
         return node
@@ -165,31 +150,37 @@ class SATransformer(ast.NodeTransformer): #XXX probably does not support x ++ 1 
             self.live_index[name] = max(after_if[name], after_else[name])
             # Add the Phi functions
             if after_if[name] < self.live_index[name]:
-                node.body.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index[name]))],    
-                                            value=ast.Name(id=self.app_ind(name,after_if[name]))))
+                # Add to the end of the if-branch: name_{live} = name_{after_if}
+                node.body.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index))],
+                                            value=ast.Name(id=self.app_ind(name,after_if))))
             if after_else[name] < self.live_index[name]:
-                node.orelse.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index[name]))],    
-                                              value=ast.Name(id=self.app_ind(name,after_else[name]))))
+                # Add to the end of the else-branch: name_{live} = name_{after_else}
+                node.orelse.append(ast.Assign(targets=[ast.Name(id=self.app_ind(name,self.live_index))],
+                                              value=ast.Name(id=self.app_ind(name,after_else))))
 
         return node
 
     def visit_Assign(self, node):
         assert len(node.targets) == 1
         value = self.visit(node.value)
-        self.live_index[node.targets[0].id] += 1
+        t = node.targets[0].id
+        if t in self.live_index:
+            self.live_index[t] += 1
+        else:
+            self.live_index[t] = 0
         target = self.visit(node.targets[0])
         return ast.Assign(targets=[target], value=value)
 
     def visit_Call(self, node):
-        for arg in node.args:
-            self.visit(arg)
+        node.args = [self.visit(arg) for arg in node.args]
         return node
 
     def visit_Name(self, node):
-        return ast.Name(id=self.app_ind(node.id,self.live_index[node.id]))
+        return ast.Name(id=self.app_ind(node.id,self.live_index))
 
-    def app_ind(self, name, ind):
-        if ind == -1:
+    def app_ind(self, name, index_dict):
+        ind = index_dict[name]
+        if ind == -1: # This is convention for the case in which arguments to functions are left alone
             return name
         else:
             return name + "_" + str(ind)
@@ -343,11 +334,14 @@ def process_D_AST(node):
     class ArgTransformer(ast.NodeTransformer):
         def visit_FunctionDef(self, node):
             assert node.name == 'D'
-            node.args.args = [ast.arg(arg=x) for x in ["event"] + h.holes] + node.args.args
+            node.args.args = [ast.arg(arg=x, annotation=None) for x in ["event"] + h.holes] + node.args.args
             return node
     ArgTransformer().visit(node)
 
     ast.fix_missing_locations(node)
+
+    #print("process_D_AST debug:")
+    #print(astor.to_source(node))
 
     c = compile(node, '<string>', mode='exec')
     m = {}
@@ -464,3 +458,7 @@ def post(Pr):
     # event() should only be in D
     # Ensure all events are event(string literal, bool exp)
     # Ensure post uses only defined events
+
+    # TODO make an internal transformation of all program identifiers
+    # to some standard generic template -- this way, we can
+    # introduce variable names without worrying about conflict.
