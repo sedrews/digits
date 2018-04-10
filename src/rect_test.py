@@ -7,7 +7,7 @@
 #     (i.e. the rectangles should have y=0 intersecting close to their center)
 
 from parse import parse_fr
-from digits import digits, Sampler
+from digits import Digits, Sampler
 from smtrepair import SMTRepair
 from samplingevaluator import SamplingEvaluator
 from probpost import ProbPost, Event
@@ -51,7 +51,8 @@ orig_prog = p.D_exec.partial_evaluate(*H_default)
 
 evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
 
-soln_gen = digits(p.pre_exec, orig_prog, repair_model, evaluator)
+d = Digits(p.pre_exec, orig_prog, repair_model, evaluator)
+soln_gen = d.soln_gen()
 
 best = None
 n = next(soln_gen)
