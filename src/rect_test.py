@@ -47,7 +47,7 @@ H_default = Holes(**p.hole_defaults[1])
 
 repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes)
 
-orig_prog = lambda *inputs : p.D_exec(*H_default, *inputs)
+orig_prog = p.D_exec.partial_evaluate(*H_default)
 
 evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
 

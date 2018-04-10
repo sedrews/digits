@@ -11,7 +11,7 @@ class SamplingEvaluator(Evaluator):
 
     def compute_post(self, prog):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
-        trials = [prog(*sample)[1] for sample in samples]
+        trials = [prog.event_call(*sample) for sample in samples] # prog is parse.EventFunc
         event_map = {}
         def Pr(event):
             t = tuple(sorted(event.items()))
@@ -37,5 +37,5 @@ class SamplingEvaluator(Evaluator):
         samples = [self.sampler.next_sample() for j in range(self.num_samples)]
         counter = 0
         for sample in samples:
-            counter += 1 if prog(*sample)[0] != self.orig_prog(*sample)[0] else 0
+            counter += 1 if prog(*sample) != self.orig_prog(*sample) else 0
         return counter / self.num_samples

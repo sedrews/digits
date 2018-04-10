@@ -1,5 +1,6 @@
 from digits import *
 from z3 import *
+from parse import EventFunc
 
 
 class SMTSolution(Solution):
@@ -38,7 +39,7 @@ class SMTRepair(RepairModel):
             # Build and return a Solution instance
             hole_values = self.holes_from_model(s.model()) # Do not inline this below
             #print("made soln with holes", self.Holes(*[float(val) for val in hole_values]))
-            soln = lambda *inputs : self.sketch(*hole_values, *inputs)
+            soln = self.sketch.partial_evaluate(*hole_values)
             try:
                 # Make sure the synthesized program is consistent with constraints
                 self.sanity_check(soln, constraints)
@@ -86,5 +87,5 @@ class SMTRepair(RepairModel):
 
     def sanity_check(self, soln, constraints):
         for sample,output in constraints.items():
-            o = soln(*sample)[0]
+            o = soln(*sample)
             assert o == output, str(sample) + ' does not map to ' + str(output) + '; instead ' + str(o)

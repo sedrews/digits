@@ -40,7 +40,7 @@ class Solution(object):
     __slots__ = 'prog','post','error'
 
     def __init__(self, prog=None, post=None, error=None):
-        self.prog = prog # An executable function; digits calls it with a single arg from Sampler
+        self.prog = prog # Anything implementing __call__ (see parse.EventFunc)
         self.post = post
         self.error = error
 
@@ -105,7 +105,7 @@ def digits(precondition, program, repair_model, evaluator, outputs=[0,1], n=10):
             leaves.remove(leaf)
             # Explore this leaf's children
             # Run the program at this leaf to propagate its solution to one child
-            val = solutions[leaf].prog(*samples[-1])[0] # Note [] has precedence over *
+            val = solutions[leaf].prog(*samples[-1]) # Note [] has precedence over *
             for value in outputs:
                 if value == val: # We can use the same solution object
                     child = solutions[leaf]

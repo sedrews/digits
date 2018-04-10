@@ -301,17 +301,51 @@ def separate_FR_AST(node):
     assert pre.name == 'pre' and D.name == 'D' and post.name == 'post'
     return ast.Module(body=[pre]), ast.Module(body=[D]), ast.Module(body=[post])
 
+
+class FractionFunc:
+    def __init__(self, func):
+        self.func = func
+    def __call__(self, *args):
+        vals = self.func()
+        return tuple(Fraction(val) for val in vals)
+
+
+class EventFunc:
+
+    def __init__(self, func, leading_args=()):
+        self.func = func # takes arguments Event,*inputs
+        # -- note inputs may include holes, but those are usually partially evaluated
+        self.leading_args = leading_args # Any partially evaluated inputs (after Event)
+        self.event_map = None
+
+    def __call__(self, *args):
+        self.event_map = {}
+        return self.func(self._event, *self.leading_args, *args)
+
+    def event_call(self, *args):
+        self.__call__(*args)
+        return self.event_map
+
+    # To facilitate instantiating a sketch with holes
+    def partial_evaluate(self, *leading_args):
+        return EventFunc(self.func, self.leading_args + leading_args)
+
+    def _event(self, event_name, bool_val):
+        # It should be an invariant that each event is encountered
+        # exactly once during the program execution
+        # (otherwise semantics don't really make sense).
+        #TODO error if a particular event is never encountered
+        assert event_name not in self.event_map
+        self.event_map[event_name] = bool_val
+
+
 def process_pre_AST(node):
     # Call eval, ensuring our support prob dists are in globals namespace
     # Return the executable
     c = compile(node, '<string>', mode='exec')
     m = {}
     eval(c, prob_dict, m)
-    pre = m['pre']
-    def wrapped():
-        inputs = pre()
-        return tuple(Fraction(val) for val in inputs)
-    return wrapped
+    return FractionFunc(m['pre'])
 
 def process_D_AST(node):
     # Replace the AST Hole() calls with fresh variables
@@ -346,21 +380,7 @@ def process_D_AST(node):
     c = compile(node, '<string>', mode='exec')
     m = {}
     eval(c, None, m)
-    D = m['D']
-    def wrapped(*xs):
-        d = {}
-        def event(event_name, bool_val):
-            # It should be an invariant that each event is encountered
-            # exactly once during the program execution
-            # (otherwise semantics don't really make sense).
-            #TODO make sure that if the event isn't encountered that something appropriate happens
-            assert event_name not in d
-            d[event_name] = bool_val
-        ret = D(event, *xs)
-        return ret, d
-    #XXX if this function is called a second time, will the previously
-    #    returned wrapped function (incorrectly) use the new m['D']?
-    #    Similar concern in process_pre_AST
+    wrapped = EventFunc(m['D'])
 
     z = Z3Encoder(inputs, h.holes)
     z.visit(SATransformer().visit(node))
