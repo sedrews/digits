@@ -52,32 +52,44 @@ class Solution(object):
 class _Queue:
 
     def __init__(self):
-        self.elements = []
+        self.items = []
 
-    def __len__(self):
-        return len(self.elements)
+    def qsize(self):
+        return len(self.items)
 
-    def pop(self):
-        ret = self.elements[0]
-        del self.elements[0]
+    def get(self):
+        ret = self.items[0]
+        del self.items[0]
         return ret
 
-    def append(self, element):
-        self.elements.append(element)
+    def put(self, item):
+        self.items.append(item)
 
 
-# I don't actually know what to do with this yet
 class Sampler:
 
     def __init__(self, prob_prog):
+        assert callable(prob_prog)
         self.prob_prog = prob_prog
+        self.samples = []
 
-    # This should return a named tuple XXX not anymore? still need to be tuples i guess
-    def next_sample(self):
-        return self.prob_prog()
+    # Returns the n-th sample (convention: as a tuple; must be unpacked when used as prog input)
+    def get(self, n):
+        while n >= len(self.samples):
+            self.samples.append(self.prob_prog())
+        return self.samples[n]
 
 
-# Digits itself
+class Node:
+    __slots__ = 'path','solution','parent','children','propto'
+    def __init__(self, **kwargs):
+        for key in self.__slots__:
+            setattr(self, key, kwargs[key] if key in kwargs else None)
+        if self.children is None:
+            self.children = {}
+
+
+# Digits itself (and auxiliary methods)
 
 def digits(precondition, program, repair_model, evaluator, outputs=[0,1], n=10):
     if isinstance(precondition, Sampler):
@@ -85,41 +97,41 @@ def digits(precondition, program, repair_model, evaluator, outputs=[0,1], n=10):
     else:
         sampler = Sampler(precondition)
 
-    samples = []
+    # The original program forms the root of the tree
+    root = Node(path=(),solution=repair_model.initial_solution(program))
+    worklist = _Queue() # Should contain (yet-unexplored) children of existing leaves
+    add_children(worklist, root, outputs)
 
-    # Can encode the tree as a map from the constraints to solutions
-    solutions = {}
-    solutions[()] = repair_model.initial_solution(program)
+    # The main loop
+    while worklist.qsize() > 0:
 
-    # For determining what solutions remain to be computed
-    leaves = [()] # Initally just the empty tuple (starting program); eventually (0,1,1,0) (0,1,1,1) etc
-    worklist = _Queue()
+        leaf = worklist.get()
 
-    while len(samples) < n:
-        samples.append(sampler.next_sample())
-        print("starting depth", len(samples), "to split", len(leaves), "leaves")
-        for leaf in leaves:
-            worklist.append(leaf)
-        while not len(worklist) == 0:
-            leaf = worklist.pop()
-            leaves.remove(leaf)
-            # Explore this leaf's children
-            # Run the program at this leaf to propagate its solution to one child
-            val = solutions[leaf].prog(*samples[-1]) # Note [] has precedence over *
-            for value in outputs:
-                if value == val: # We can use the same solution object
-                    child = solutions[leaf]
-                    leaves.append((*leaf, value))
-                    solutions[(*leaf, value)] = child
-                else: # We have to compute the solution
-                    child = repair_model.make_solution(dict(zip(samples, (*leaf, value))))
-                    if child is not None:
-                        leaves.append((*leaf, value))
-                        solutions[(*leaf, value)] = child
-                        child.post = evaluator.compute_post(child.prog)
-                        if child.post: # Only compute error for correct solutions
-                            child.error = evaluator.compute_error(child.prog)
-    # TODO .values() is inefficient with multiplicity
-    return min([soln for soln in solutions.values() if soln.post], key=lambda x : x.error)
-    #return solutions.values()
+        # Handle solution propagation
+        parent = leaf.parent
+        if parent.propto is None:
+            # Run the parent program to see which child receives propagation
+            val = parent.solution.prog(*sampler.get(len(leaf.path) - 1))
 
+        if leaf.path[-1] == parent.propto: # We can propagate the solution
+            leaf.solution = parent.solution
+            add_children(worklist, leaf, outputs)
+        else: # We have to compute a solution (if one exists)
+            leaf.solution = repair_model.make_solution(constraint_dict(sampler, leaf.path))
+            if leaf.solution is not None:
+                add_children(worklist, leaf, outputs)
+                leaf.solution.post = evaluator.compute_post(leaf.solution.prog)
+                if leaf.solution.post: # Only compute error for correct solutions
+                    leaf.solution.error = evaluator.compute_error(leaf.solution.prog)
+        
+        yield leaf
+
+def add_children(worklist, parent, outputs):
+    for value in outputs:
+        child = Node(path=parent.path+(value,), parent=parent)
+        parent.children[value] = child
+        worklist.put(child)
+
+def constraint_dict(sampler, path):
+    samples = [sampler.get(n) for n in range(len(path))]
+    return dict(zip(samples, path))

@@ -10,7 +10,7 @@ class SamplingEvaluator(Evaluator):
         self.num_samples = num_samples
 
     def compute_post(self, prog):
-        samples = [self.sampler.next_sample() for j in range(self.num_samples)]
+        samples = [self.sampler.get(j) for j in range(self.num_samples)]
         trials = [prog.event_call(*sample) for sample in samples] # prog is parse.EventFunc
         event_map = {}
         def Pr(event):
@@ -34,7 +34,7 @@ class SamplingEvaluator(Evaluator):
         return res
 
     def compute_error(self, prog):
-        samples = [self.sampler.next_sample() for j in range(self.num_samples)]
+        samples = [self.sampler.get(j) for j in range(self.num_samples)]
         counter = 0
         for sample in samples:
             counter += 1 if prog(*sample) != self.orig_prog(*sample) else 0

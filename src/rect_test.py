@@ -51,8 +51,18 @@ orig_prog = p.D_exec.partial_evaluate(*H_default)
 
 evaluator = SamplingEvaluator(Sampler(p.pre_exec), p.post_exec, orig_prog)
 
-soln = digits(p.pre_exec, orig_prog, repair_model, evaluator)
+soln_gen = digits(p.pre_exec, orig_prog, repair_model, evaluator)
 
-print("best repair:")
+best = None
+n = next(soln_gen)
+while len(n.path) < 10:
+    print(n.path, ":", "(" + str(n.solution.post) + "," + str(n.solution.error) + ")" if n.solution is not None else str(None))
+    if n.solution is not None and n.solution.post:
+        if best is None or best.solution.error > n.solution.error:
+            best = n
+    n = next(soln_gen)
+
+soln = best.solution
+print("best repair:", best.path)
 print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
 print("error", soln.error)
