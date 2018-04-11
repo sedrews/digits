@@ -19,9 +19,11 @@ class SMTRepair(RepairModel):
         self.output_variable = output_variable
         self.Holes = Holes
 
-        self.unsat_core_list = []
+        # A separate CoreStore for each depth (can prove matches never occur between different depths)
+        self.unsat_cores = {}
 
-    # constraints maps each input Sample to an ouput
+    # constraints maps each input Sample to an ouput (stored as a list of tuples) --
+    # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):
         # Try unsat core pruning
         if self.core_matches(constraints):
@@ -29,16 +31,13 @@ class SMTRepair(RepairModel):
 
         # Do actual synthesis work
         s = Solver()
-        conj_ids = {} # Map conjunctions (i.e. (Sample,output) pairs) to their ids for unsat cores
-        for constraint in constraints.items():
-            #s.add(self.constraint_to_z3(constraint))
-            conj_id = 'p' + str(len(conj_ids)) # XXX this could collide with variable names
+        for i in range(len(constraints)):
+            constraint = constraints[i]
+            conj_id = 'p' + str(i) # XXX this could collide with variable names
             s.assert_and_track(self.constraint_to_z3(constraint), conj_id)
-            conj_ids[constraint] = conj_id
         if s.check() == z3.sat:
             # Build and return a Solution instance
-            hole_values = self.holes_from_model(s.model()) # Do not inline this below
-            #print("made soln with holes", self.Holes(*[float(val) for val in hole_values]))
+            hole_values = self.holes_from_model(s.model())
             soln = self.sketch.partial_evaluate(*hole_values)
             try:
                 # Make sure the synthesized program is consistent with constraints
@@ -53,13 +52,15 @@ class SMTRepair(RepairModel):
                 print("model", s.model())
                 exit(1)
             return SMTSolution(prog=soln, holes=hole_values)
-        else: #unsat
+        else: # unsat
             # Extract an unsat core (when non-trivial)
             if len(s.unsat_core()) < len(constraints):
-                core = [str(v) for v in s.unsat_core()]
-                # If core contains the id for constraint c, we want to include it in our core list
-                d = dict([constraint for constraint in constraints.items() if conj_ids[constraint] in core])
-                self.unsat_core_list.append(d)
+                # The names of the variables stored their constraint index,
+                # i.e. some str(v) below looks like 'p15' when constraints[15] contributes to the unsat core
+                core = [int(str(v)[1:]) for v in s.unsat_core()]
+                # Represent as a list of (constraint number, specified output)
+                core = [(v,constraints[v][1]) for v in core]
+                self.core_process(core)
             return None
 
     # constraint is a tuple of (Sample, output) where Sample is an input tuple
@@ -75,17 +76,42 @@ class SMTRepair(RepairModel):
                             for attr in self.Holes._fields])
 
     def core_matches(self, constraints):
-        for core in self.unsat_core_list:
+        coreindex = len(constraints) - 1
+        if coreindex in self.unsat_cores:
+            return self.unsat_cores[coreindex].check_match([c[0] for c in constraints])
+        return False
+
+    def core_process(self, core):
+        assert(len(core) > 0)
+        core.sort(key=lambda t : t[0], reverse=True)
+        coreindex = core[0][0]
+        if coreindex not in self.unsat_cores:
+            self.unsat_cores[coreindex] = CoreStore()
+        self.unsat_cores[coreindex].add_core(core)
+
+    def sanity_check(self, soln, constraints):
+        for sample,output in constraints:
+            o = soln(*sample)
+            assert o == output, str(sample) + ' does not map to ' + str(output) + '; instead ' + str(o)
+
+
+class CoreStore:
+
+    def __init__(self):
+        self.core_list = []
+
+    # constraints is a list of output values
+    def check_match(self, constraints):
+        for core in self.core_list:
             match = True
-            for key in core:
-                if core[key] != constraints[key]:
+            for index,out in core:
+                if constraints[index] != out:
                     match = False
                     break
             if match:
                 return True
         return False
 
-    def sanity_check(self, soln, constraints):
-        for sample,output in constraints.items():
-            o = soln(*sample)
-            assert o == output, str(sample) + ' does not map to ' + str(output) + '; instead ' + str(o)
+    # core is a list of (index of constraint, specified output value)
+    def add_core(self, core):
+        self.core_list.append(core)

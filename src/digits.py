@@ -22,11 +22,12 @@ class Evaluator(ABC):
 
 class RepairModel(ABC):
 
-    # Can Override this to do something more sophisticated
+    # Can override this to do something more sophisticated
     def initial_solution(self, program):
         return Solution(prog=program, post=False, error=0)
 
-    # constraints is a dictionary from the input tuple to the output value # TODO should it not be a dictionary?
+    # constraints is a list of (input,output) tuples;
+    # guarantee the convention that their order matches the sampleset
     @abstractmethod
     def make_solution(self, constraints):
         pass
@@ -162,7 +163,7 @@ class Digits:
                 leaf.solution = parent.solution
                 self._add_children(leaf)
             else: # We have to compute a solution (if one exists)
-                constraints = self._constraint_dict(leaf.path)
+                constraints = self._constraint_list(leaf.path)
                 leaf.solution = self.repair_model.make_solution(constraints)
                 if leaf.solution is not None:
                     self._add_children(leaf)
@@ -181,6 +182,6 @@ class Digits:
                 self.worklist.put(child)
                 self.tree[child.path] = child
 
-    def _constraint_dict(self, path):
+    def _constraint_list(self, path):
         samples = [self.sampler.get(n) for n in range(len(path))]
-        return dict(zip(samples, path))
+        return list(zip(samples, path))
