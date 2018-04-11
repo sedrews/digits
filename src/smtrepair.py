@@ -12,6 +12,11 @@ class SMTSolution(Solution):
 
 class SMTRepair(RepairModel):
 
+    # sketch is a parse.EventFunc with some of the input variables being holes
+    # template is a z3 formula representing program whose free variables are inputs,holes,output
+    # input_variables is a list of the z3 variable objects (in the same order as in Sample and in function header)
+    # output_variable is the z3 variable object for the return value
+    # Holes is a named tuple whose fields are the hole variable names
     def __init__(self, sketch, template, input_variables, output_variable, Holes):
         self.sketch = sketch
         self.template = template
