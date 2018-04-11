@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+import heapq
+from functools import total_ordering
 
 
 # Using digits requires providing an implementation of
@@ -24,7 +26,7 @@ class RepairModel(ABC):
     def initial_solution(self, program):
         return Solution(prog=program, post=False, error=0)
 
-    # constraints is a dictionary from the input tuple to the output value
+    # constraints is a dictionary from the input tuple to the output value # TODO should it not be a dictionary?
     @abstractmethod
     def make_solution(self, constraints):
         pass
@@ -48,24 +50,6 @@ class Solution(object):
 #
 
 
-# Right now this badly emulates a list, but eventually it will be sophisticated
-class _Queue:
-
-    def __init__(self):
-        self.items = []
-
-    def qsize(self):
-        return len(self.items)
-
-    def get(self):
-        ret = self.items[0]
-        del self.items[0]
-        return ret
-
-    def put(self, item):
-        self.items.append(item)
-
-
 class Sampler:
 
     def __init__(self, prob_prog):
@@ -78,6 +62,43 @@ class Sampler:
         while n >= len(self.samples):
             self.samples.append(self.prob_prog())
         return self.samples[n]
+
+
+class _HeapQueue:
+
+    # heapq.heappush(tuple) seems to sort tuples lexicographically
+    # -- we want to sort only by valuation stored at [0] as otherwise all elements need a comparator
+    @total_ordering
+    class _Tuple(tuple):
+        def __eq__(self, other):
+            if not isinstance(other, _HeapQueue._Tuple):
+                return NotImplemented
+            return self[0].__eq__(other[0])
+        def __lt__(self, other):
+            if not isinstance(other, _HeapQueue._Tuple):
+                return NotImplemented
+            return self[0].__lt__(other[0])
+
+    def __init__(self, parameter=None, valuation=None, threshold=None):
+        self.items = [] # Stored as (valuation, item) but wrapped in _Tuple
+        self.parameter = parameter
+        self.valuation = valuation # A function : node -> numeric TODO eventually : parameter,node -> numeric
+        self.threshold = threshold # A function : parameter -> numeric
+
+    def qsize(self):
+        return len(self.items)
+
+    # Returns the least item that passes the threshold (or None if none pass)
+    def get(self):
+        # Recall self.items[n] = (valuation, item)
+        if self.items[0][0] <= self.threshold(self.parameter):
+            ret = heapq.heappop(self.items)
+            return ret[1]
+        else:
+            return None
+
+    def put(self, item):
+        heapq.heappush(self.items, self._Tuple((self.valuation(item), item))) # Sorts by valuation
 
 
 class Node:
@@ -96,7 +117,7 @@ class Node:
 
 class Digits:
 
-    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1)):
+    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None):
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -106,26 +127,34 @@ class Digits:
         self.evaluator = evaluator
         self.outputs = outputs
         
-        # Maintain an explicit representation of the tree as a map from binary strings to nodes
+        # Maintain an (auxiliary) explicit representation of the tree as a map from binary strings to nodes
         self.tree = {} # Note this will also include non-explored nodes in the worklist
         # The original program forms the root of the tree
         self.root = Node(path=(),solution=repair_model.initial_solution(program))
         self.tree[()] = self.root
 
+        self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
+        self.parameter = 0 # Bounds the largest constraint string explored (dynamically increases)
+
         # worklist contains (yet-unexplored) children of existing leaves
-        self.worklist = _Queue()
+        valuation = lambda n : len(n.path) # Nodes are sorted by their depth
+        threshold = lambda p : p # We will use depth as the parameter and thus threshold
+        self.worklist = _HeapQueue(self.parameter, valuation, threshold)
         self._add_children(self.root)
 
-
     def soln_gen(self):
-        while self.worklist.qsize() > 0:
+        while self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes
 
             leaf = self.worklist.get()
+            if leaf is None: # We need to expand the depth of the search
+                self.parameter += 1
+                self.worklist.parameter = self.parameter
+                continue
 
             # Handle solution propagation
             parent = leaf.parent
             if parent.propto is None:
-                # Run the parent program to see which child receives propagation
+                # Run the parent program to see which child receives propagation (and cache)
                 val = parent.solution.prog(*self.sampler.get(len(leaf.path) - 1))
                 parent.propto = val
 
@@ -144,11 +173,13 @@ class Digits:
             yield leaf
 
     def _add_children(self, parent):
-        for value in self.outputs:
-            child = Node(path=parent.path+(value,), parent=parent)
-            parent.children[value] = child
-            self.worklist.put(child)
-            self.tree[child.path] = child
+        # Only add the children if they are at a depth we would consider
+        if self.max_depth is None or len(parent.path) < self.max_depth: # So len(child.path) <= max
+            for value in self.outputs:
+                child = Node(path=parent.path+(value,), parent=parent)
+                parent.children[value] = child
+                self.worklist.put(child)
+                self.tree[child.path] = child
 
     def _constraint_dict(self, path):
         samples = [self.sampler.get(n) for n in range(len(path))]
