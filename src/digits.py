@@ -127,6 +127,7 @@ class Digits:
             if parent.propto is None:
                 # Run the parent program to see which child receives propagation
                 val = parent.solution.prog(*self.sampler.get(len(leaf.path) - 1))
+                parent.propto = val
 
             if leaf.path[-1] == parent.propto: # We can propagate the solution
                 leaf.solution = parent.solution
