@@ -1,6 +1,5 @@
 from digits import *
 from z3 import *
-from parse import EventFunc
 
 
 class SMTSolution(Solution):
@@ -12,7 +11,7 @@ class SMTSolution(Solution):
 
 class SMTRepair(RepairModel):
 
-    # sketch is a parse.EventFunc with some of the input variables being holes
+    # sketch is a parse.EventFunc with some of the input variables being holes -- it needs to have .partial_evaluate
     # template is a z3 formula representing program whose free variables are inputs,holes,output
     # input_variables is a list of the z3 variable objects (in the same order as in Sample and in function header)
     # output_variable is the z3 variable object for the return value
@@ -87,7 +86,7 @@ class SMTRepair(RepairModel):
         return False
 
     def core_process(self, core):
-        assert(len(core) > 0)
+        assert len(core) > 0
         core.sort(key=lambda t : t[0], reverse=True)
         coreindex = core[0][0]
         if coreindex not in self.unsat_cores:
