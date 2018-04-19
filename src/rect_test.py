@@ -10,13 +10,8 @@ from parse import parse_fr
 from digits import Digits, Sampler
 from smtrepair import SMTRepair
 from samplingevaluator import SamplingEvaluator
-from probpost import ProbPost, Event
-
-from z3 import *
 
 from collections import namedtuple
-import random
-
 
 prog_string='''
 def pre():
