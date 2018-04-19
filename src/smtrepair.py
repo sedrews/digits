@@ -23,14 +23,17 @@ class SMTRepair(RepairModel):
         self.output_variable = output_variable
         self.Holes = Holes
 
-        # A separate CoreStore for each depth (can prove matches never occur between different depths)
-        self.unsat_cores = {}
+        self.unsat_cores = CoreStore()
 
     # constraints maps each input Sample to an ouput (stored as a list of tuples) --
     # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):
         # Try unsat core pruning
-        if self.core_matches(constraints):
+        if self.unsat_cores.check_match([c[1] for c in constraints]):
+            #s = Solver()
+            #for i in range(len(constraints)):
+            #    s.add(self.constraint_to_z3(constraints[i]))
+            #assert s.check() == unsat
             return None
 
         # Do actual synthesis work
@@ -61,10 +64,10 @@ class SMTRepair(RepairModel):
             if len(s.unsat_core()) < len(constraints):
                 # The names of the variables stored their constraint index,
                 # i.e. some str(v) below looks like 'p15' when constraints[15] contributes to the unsat core
-                core = [int(str(v)[1:]) for v in s.unsat_core()]
+                core = sorted([int(str(v)[1:]) for v in s.unsat_core()])
                 # Represent as a list of (constraint number, specified output)
                 core = [(v,constraints[v][1]) for v in core]
-                self.core_process(core)
+                self.unsat_cores.add_core(core)
             return None
 
     # constraint is a tuple of (Sample, output) where Sample is an input tuple
@@ -79,20 +82,6 @@ class SMTRepair(RepairModel):
         return self.Holes(*[model.evaluate(Real(attr), model_completion=True).as_fraction() \
                             for attr in self.Holes._fields])
 
-    def core_matches(self, constraints):
-        coreindex = len(constraints) - 1
-        if coreindex in self.unsat_cores:
-            return self.unsat_cores[coreindex].check_match([c[0] for c in constraints])
-        return False
-
-    def core_process(self, core):
-        assert len(core) > 0
-        core.sort(key=lambda t : t[0], reverse=True)
-        coreindex = core[0][0]
-        if coreindex not in self.unsat_cores:
-            self.unsat_cores[coreindex] = CoreStore()
-        self.unsat_cores[coreindex].add_core(core)
-
     def sanity_check(self, soln, constraints):
         for sample,output in constraints:
             o = soln(*sample)
@@ -102,11 +91,16 @@ class SMTRepair(RepairModel):
 class CoreStore:
 
     def __init__(self):
-        self.core_list = []
+        self.core_lists = {} # Separate list for each depth
+
+    def _fetch(self, n):
+        if n not in self.core_lists:
+            self.core_lists[n] = []
+        return self.core_lists[n]
 
     # constraints is a list of output values
     def check_match(self, constraints):
-        for core in self.core_list:
+        for core in self._fetch(len(constraints) - 1):
             match = True
             for index,out in core:
                 if constraints[index] != out:
@@ -118,4 +112,5 @@ class CoreStore:
 
     # core is a list of (index of constraint, specified output value)
     def add_core(self, core):
-        self.core_list.append(core)
+        assert len(core) > 0
+        self._fetch(max([c[0] for c in core])).append(core)
