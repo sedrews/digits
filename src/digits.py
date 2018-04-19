@@ -80,26 +80,43 @@ class _HeapQueue:
                 return NotImplemented
             return self[0].__lt__(other[0])
 
-    def __init__(self, parameter=None, valuation=None, threshold=None):
+    def __init__(self, depth=None, valuation=None, threshold=None):
         self.items = [] # Stored as (valuation, item) but wrapped in _Tuple
-        self.parameter = parameter
-        self.valuation = valuation # A function : node -> numeric TODO eventually : parameter,node -> numeric
-        self.threshold = threshold # A function : parameter -> numeric
+        self._depth = depth
+        self.valuation = valuation # A function : node -> numeric
+        self.threshold = threshold # A function : depth -> numeric
+        self.standby = [] # Stored as (depth, item) but wrapped in _Tuple
+
+    @property
+    def depth(self):
+        return self._depth
+    @depth.setter
+    def depth(self, value):
+        assert self._depth <= value
+        self._depth = value
+        # When we expand the depth, some new nodes can be considered
+        while len(self.standby) > 0 and self.standby[0][0] <= self._depth:
+            self.put(heapq.heappop(self.standby)[1])
+
 
     def qsize(self):
-        return len(self.items)
+        return len(self.items) + len(self.standby)
 
     # Returns the least item that passes the threshold (or None if none pass)
     def get(self):
         # Recall self.items[n] = (valuation, item)
-        if self.items[0][0] <= self.threshold(self.parameter):
+        if len(self.items) > 0 and self.items[0][0] <= self.threshold(self._depth):
             ret = heapq.heappop(self.items)
             return ret[1]
         else:
             return None
 
     def put(self, item):
-        heapq.heappush(self.items, self._Tuple((self.valuation(item), item))) # Sorts by valuation
+        d = len(item.path)
+        if d <= self._depth:
+            heapq.heappush(self.items, self._Tuple((self.valuation(item), item))) # Sorts by valuation
+        else:
+            heapq.heappush(self.standby, self._Tuple((d, item))) # Sorts by depth
 
 
 class Node:
@@ -135,12 +152,12 @@ class Digits:
         self.tree[()] = self.root
 
         self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
-        self.parameter = 0 # Bounds the largest constraint string explored (dynamically increases)
+        self.depth = 0 # Bounds the largest constraint string explored (dynamically increases)
 
         # worklist contains (yet-unexplored) children of existing leaves
         valuation = lambda n : len(n.path) # Nodes are sorted by their depth
         threshold = lambda p : p # We will use depth as the parameter and thus threshold
-        self.worklist = _HeapQueue(self.parameter, valuation, threshold)
+        self.worklist = _HeapQueue(self.depth, valuation, threshold)
         self._add_children(self.root)
 
     def soln_gen(self):
@@ -148,8 +165,8 @@ class Digits:
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
-                self.parameter += 1
-                self.worklist.parameter = self.parameter
+                self.depth += 1 # We handle comparing to self.max_depth in _add_children
+                self.worklist.depth = self.depth
                 continue
 
             # Handle solution propagation
