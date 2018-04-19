@@ -24,12 +24,28 @@ class SMTRepair(RepairModel):
         self.Holes = Holes
 
         self.unsat_cores = CoreStore()
+        class Stats:
+            def __init__(self):
+                self.calls = 0 # calls = smt + pruned
+                self.smt = 0 # smt = sat + unsat
+                self.sat = 0
+                self.unsat = 0
+                self.pruned = 0
+            def __str__(self):
+                return 'calls:' + str(self.calls) + ', ' + \
+                       'smt:' + str(self.smt) + ', ' + \
+                       'sat:' + str(self.sat) + ', ' + \
+                       'unsat:' + str(self.unsat) + ', ' + \
+                       'pruned:' + str(self.pruned)
+        self.stats = Stats()
 
     # constraints maps each input Sample to an ouput (stored as a list of tuples) --
     # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):
+        self.stats.calls += 1
         # Try unsat core pruning
         if self.unsat_cores.check_match([c[1] for c in constraints]):
+            self.stats.pruned += 1
             #s = Solver()
             #for i in range(len(constraints)):
             #    s.add(self.constraint_to_z3(constraints[i]))
@@ -37,12 +53,14 @@ class SMTRepair(RepairModel):
             return None
 
         # Do actual synthesis work
+        self.stats.smt += 1
         s = Solver()
         for i in range(len(constraints)):
             constraint = constraints[i]
             conj_id = 'p' + str(i) # XXX this could collide with variable names
             s.assert_and_track(self.constraint_to_z3(constraint), conj_id)
         if s.check() == z3.sat:
+            self.stats.sat += 1
             # Build and return a Solution instance
             hole_values = self.holes_from_model(s.model())
             soln = self.sketch.partial_evaluate(*hole_values)
@@ -60,6 +78,7 @@ class SMTRepair(RepairModel):
                 exit(1)
             return SMTSolution(prog=soln, holes=hole_values)
         else: # unsat
+            self.stats.unsat += 1
             # Extract an unsat core (when non-trivial)
             if len(s.unsat_core()) < len(constraints):
                 # The names of the variables stored their constraint index,

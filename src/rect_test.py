@@ -70,3 +70,4 @@ soln = best.solution
 print("best repair:", best.path)
 print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
 print("error", soln.error)
+print("stats:", repair_model.stats)
