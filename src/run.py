@@ -11,7 +11,9 @@ import argparse
 import random
 import numpy
 
-def run_benchmark(filename, max_depth, random_seed, opt_ratio):
+import time
+
+def run_benchmark(filename, max_depth, random_seed, opt_ratio, track_all, outfilename):
     if random_seed is not None:
         random.seed(random_seed)
         numpy.random.seed(random_seed)
@@ -40,7 +42,11 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio):
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, opt=opt_ratio)
     soln_gen = d.soln_gen()
 
+    if outfilename is not None:
+        csv = open(outfilename, "w")
+
     best = None
+    start_time = time.time()
     while True:
         try:
             n = next(soln_gen)
@@ -48,15 +54,20 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio):
             break
         print(n.path, ":", "(" + str(n.solution.post) + "," + str(n.solution.error) + ")" \
                            if n.solution is not None else str(None))
-        if n.solution is not None and n.solution.post:
+        if n.solution is not None and (track_all or n.solution.post):
             if best is None or best.solution.error > n.solution.error:
                 best = n
+                if outfilename is not None:
+                    csv.write(str(time.time() - start_time) + ',' + str(best.solution.error) + ',' + str(best.solution.post) + '\n')
 
     soln = best.solution
     print("best repair:", best.path)
     print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
     print("error", soln.error)
     print("stats:", repair_model.stats)
+    if outfilename is not None:
+        csv.write(str(time.time() - start_time))
+        csv.close()
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -68,8 +79,12 @@ def parse_args():
                         help='Set the random seed')
     parser.add_argument('-o', '--opt', required=False, type=float, default=None,
                         help='If specified, is the ratio of the depth used as a Hamming distance threshold for the optimized search; if unspecified, the search proceeds in level-order')
+    parser.add_argument('-a', '--all', required=False, action='store_true', default=False,
+                        help='Track best distance of all solutions (as opposed to only fair solutions)')
+    parser.add_argument('-w', '--write', required=False, type=str, default=None,
+                        help='Write best solution as function of time to this file (csv format)')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
-    run_benchmark(args.file, args.depth, args.seed, args.opt)
+    run_benchmark(args.file, args.depth, args.seed, args.opt, args.all, args.write)
