@@ -11,7 +11,7 @@ import argparse
 import random
 import numpy
 
-def run_benchmark(filename, max_depth, random_seed):
+def run_benchmark(filename, max_depth, random_seed, opt_ratio):
     if random_seed is not None:
         random.seed(random_seed)
         numpy.random.seed(random_seed)
@@ -37,7 +37,7 @@ def run_benchmark(filename, max_depth, random_seed):
 
     evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog)
 
-    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth)
+    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, opt=opt_ratio)
     soln_gen = d.soln_gen()
 
     best = None
@@ -66,8 +66,10 @@ def parse_args():
                         help='Maximum depth of the search')
     parser.add_argument('-s', '--seed', required=False, type=int, default=None,
                         help='Set the random seed')
+    parser.add_argument('-o', '--opt', required=False, type=float, default=None,
+                        help='If specified, is the ratio of the depth used as a Hamming distance threshold for the optimized search; if unspecified, the search proceeds in level-order')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
-    run_benchmark(args.file, args.depth, args.seed)
+    run_benchmark(args.file, args.depth, args.seed, args.opt)

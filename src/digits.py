@@ -107,6 +107,7 @@ class _HeapQueue:
         # Recall self.items[n] = (valuation, item)
         if len(self.items) > 0 and self.items[0][0] <= self.threshold(self._depth):
             ret = heapq.heappop(self.items)
+            #print("popped item with valuation", ret[0])
             return ret[1]
         else:
             return None
@@ -135,7 +136,7 @@ class Node:
 
 class Digits:
 
-    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None):
+    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, opt=None):
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -154,9 +155,17 @@ class Digits:
         self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
         self.depth = 0 # Bounds the largest constraint string explored (dynamically increases)
 
+        self.opt = opt # Whether to do level-order traversal or Hamming distance heuristic
         # worklist contains (yet-unexplored) children of existing leaves
-        valuation = lambda n : len(n.path) # Nodes are sorted by their depth
-        threshold = lambda p : p # We will use depth as the parameter and thus threshold
+        if opt is None: # Do an in-order traversal
+            valuation = lambda n : len(n.path) # Nodes are sorted by their depth
+            threshold = lambda d : d # We will use depth itself as the threshold
+        else: # Otherwise it is the threshold ratio
+            assert self.max_depth is not None
+            self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
+            # Nodes are sorted by their Hamming distance from the original program
+            valuation = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
+            threshold = lambda d : self.opt * d # We use a fraction of the depth as the threshold
         self.worklist = _HeapQueue(self.depth, valuation, threshold)
         self._add_children(self.root)
 
