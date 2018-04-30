@@ -40,7 +40,7 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio, track_all, outfil
 
     evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, num_samples=eval_sample_size)
 
-    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, opt=opt_ratio)
+    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio)
     soln_gen = d.soln_gen()
 
     if outfilename is not None:
@@ -78,8 +78,8 @@ def parse_args():
                         help='Maximum depth of the search')
     parser.add_argument('-s', '--seed', required=False, type=int, default=None,
                         help='Set the random seed')
-    parser.add_argument('-o', '--opt', required=False, type=float, default=None,
-                        help='If specified, is the ratio of the depth used as a Hamming distance threshold for the optimized search; if unspecified, the search proceeds in level-order')
+    parser.add_argument('-o', '--opt', required=False, type=float, default=1,
+                        help='The ratio of the depth used as a Hamming distance threshold for the optimized search; when == 1, the search proceeds in level-order')
     parser.add_argument('-a', '--all', required=False, action='store_true', default=False,
                         help='Track best distance of all solutions (as opposed to only fair solutions)')
     parser.add_argument('-w', '--write', required=False, type=str, default=None,

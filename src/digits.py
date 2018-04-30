@@ -137,7 +137,7 @@ class Node:
 
 class Digits:
 
-    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, opt=None):
+    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1):
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -156,24 +156,23 @@ class Digits:
         self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
         self.depth = 0 # Bounds the largest constraint string explored (dynamically increases)
 
-        self.opt = opt # Whether to do level-order traversal or Hamming distance heuristic
+        assert self.max_depth is not None # XXX reproducing random seed results is hard if future samples depend on what has happened during the search
+        self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
+        #print("orig labeling:", self.original_labeling)
+
+        self.hthresh = hthresh # Hamming distance heuristic threshold (default 1 => level-order traversal)
+        # Nodes are sorted by their Hamming distance from the original program
+        hamming_count = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
         # worklist contains (yet-unexplored) children of existing leaves
-        if opt is None: # Do an in-order traversal
-            valuation = lambda n : len(n.path) # Nodes are sorted by their depth
-            threshold = lambda d : d # We will use depth itself as the threshold
-        else: # Otherwise it is the threshold ratio
-            assert self.max_depth is not None
-            self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
-            print("orig labeling:", self.original_labeling)
-            # Nodes are sorted by their Hamming distance from the original program
-            valuation = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
-            threshold = lambda d : self.opt * d # We use a fraction of the depth as the threshold
-        self.worklist = _HeapQueue(self.depth, valuation, threshold)
+        self.worklist = _HeapQueue(self.depth, hamming_count, self._get_threshold_func())
         self._add_children(self.root)
+
+    def _get_threshold_func(self):
+        return lambda d : self.hthresh * d # We use a fraction of the depth as the threshold
 
     def soln_gen(self):
         start_time = time.time()
-        while True: #self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes
+        while self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
