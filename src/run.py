@@ -32,12 +32,13 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio, track_all, outfil
     
     s1 = Sampler(p.pre_exec)
     s2 = Sampler(p.pre_exec)
+    eval_sample_size = 2000
     # If we're controlling for random seed, prefetch all samples
     if random_seed is not None:
         s1.get(max_depth)
-        s2.get(2000)
+        s2.get(eval_sample_size)
 
-    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog)
+    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, num_samples=eval_sample_size)
 
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, opt=opt_ratio)
     soln_gen = d.soln_gen()
@@ -52,8 +53,8 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio, track_all, outfil
             n = next(soln_gen)
         except StopIteration:
             break
-        print(n.path, ":", "(" + str(n.solution.post) + "," + str(n.solution.error) + ")" \
-                           if n.solution is not None else str(None))
+        #print(n.path, ":", "(" + str(n.solution.post) + "," + str(n.solution.error) + ")" \
+        #                   if n.solution is not None else str(None))
         if n.solution is not None and (track_all or n.solution.post):
             if best is None or best.solution.error > n.solution.error:
                 best = n
@@ -61,7 +62,7 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio, track_all, outfil
                     csv.write(str(time.time() - start_time) + ',' + str(best.solution.error) + ',' + str(best.solution.post) + '\n')
 
     soln = best.solution
-    print("best repair:", best.path)
+    print("best repair:", best.path, "(len:", len(best.path), ", valuation:", d.worklist.valuation(best), ")")
     print("holes", [float(soln.holes[i]) for i in range(len(soln.holes))])
     print("error", soln.error)
     print("stats:", repair_model.stats)

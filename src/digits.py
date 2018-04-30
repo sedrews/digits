@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import heapq
 from functools import total_ordering
 
+import time
 
 # Using digits requires providing an implementation of
 #   1) Evaluator -- a way to check the postcondition and compute the error function
@@ -163,6 +164,7 @@ class Digits:
         else: # Otherwise it is the threshold ratio
             assert self.max_depth is not None
             self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
+            print("orig labeling:", self.original_labeling)
             # Nodes are sorted by their Hamming distance from the original program
             valuation = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
             threshold = lambda d : self.opt * d # We use a fraction of the depth as the threshold
@@ -170,11 +172,16 @@ class Digits:
         self._add_children(self.root)
 
     def soln_gen(self):
-        while self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes
+        start_time = time.time()
+        while True: #self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
+                print(time.time()-start_time, "finished depth", self.depth)
                 self.depth += 1 # We handle comparing to self.max_depth in _add_children
+                # Actually, for now, let this be incomplete
+                if self.depth > self.max_depth:
+                    break
                 self.worklist.depth = self.depth
                 continue
 
