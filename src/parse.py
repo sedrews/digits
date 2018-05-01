@@ -306,6 +306,8 @@ class FractionFunc:
         self.func = func
     def __call__(self, *args):
         vals = self.func()
+        if type(vals) is not tuple:
+            vals = (vals,)
         return tuple(Fraction(val) for val in vals)
 
 
