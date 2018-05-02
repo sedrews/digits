@@ -138,7 +138,7 @@ class Node:
 
 class Digits:
 
-    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1):
+    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1, adaptive=None):
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -167,6 +167,8 @@ class Digits:
         # worklist contains (yet-unexplored) children of existing leaves
         self.worklist = _HeapQueue(self.depth, hamming_count, self._get_threshold_func())
         self._add_children(self.root)
+
+        self.adaptive = adaptive # Whether to change self.hthresh dynamically
 
     def _get_threshold_func(self):
         return lambda d : self.hthresh * d # We use a fraction of the depth as the threshold
@@ -203,8 +205,17 @@ class Digits:
                     leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog)
                     if leaf.solution.post: # Only compute error for correct solutions
                         leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog)
+                        if self.adaptive is not None:
+                            self._update_hthresh(leaf.solution.error)
             
             yield leaf
+
+    def _update_hthresh(self, error):
+        new_thresh = error + self.adaptive
+        if new_thresh < self.hthresh:
+            print("found correct soln with error", error, "; updating threshold to", new_thresh)
+            self.hthresh = new_thresh
+            self.worklist.threshold = self._get_threshold_func()
 
     def _add_children(self, parent):
         # Only add the children if they are at a depth we would consider
