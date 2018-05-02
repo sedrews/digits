@@ -80,8 +80,8 @@ def parse_args():
                         help='Set the random seed')
     parser.add_argument('-o', '--opt', required=False, type=float, default=1,
                         help='The ratio of the depth used as a Hamming distance threshold for the optimized search; when == 1, the search proceeds in level-order')
-    parser.add_argument('-a', '--adapt', required=False, type=float, default=None,
-                        help='If specified, let a be its value: updates the --opt value to e+a when finding a correct solution with error e')
+    parser.add_argument('-a', '--adapt', required=False, nargs=2, type=float, default=None,
+                        help='If specified, let (a,b) be its value: updates the --opt value to ae+b when finding a correct solution with error e')
     #parser.add_argument('-a', '--all', required=False, action='store_true', default=False,
     #                    help='Track best distance of all solutions (as opposed to only fair solutions)')
     parser.add_argument('-w', '--write', required=False, type=str, default=None,

@@ -211,7 +211,7 @@ class Digits:
             yield leaf
 
     def _update_hthresh(self, error):
-        new_thresh = error + self.adaptive
+        new_thresh = self.adaptive[0] * error + self.adaptive[1]
         if new_thresh < self.hthresh:
             print("found correct soln with error", error, "; updating threshold to", new_thresh)
             self.hthresh = new_thresh
