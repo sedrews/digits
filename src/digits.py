@@ -106,7 +106,7 @@ class _HeapQueue:
     # Returns the least item that passes the threshold (or None if none pass)
     def get(self):
         # Recall self.items[n] = (valuation, item)
-        if len(self.items) > 0 and self.items[0][0] <= self.threshold(self._depth):
+        if len(self.items) > 0 and self.items[0][0][0] <= self.threshold(self._depth):
             ret = heapq.heappop(self.items)
             #print("popped item with valuation", ret[0])
             return ret[1]
@@ -116,7 +116,8 @@ class _HeapQueue:
     def put(self, item):
         d = len(item.path)
         if d <= self._depth:
-            heapq.heappush(self.items, self._Tuple((self.valuation(item), item))) # Sorts by valuation
+            # Sorts by valuation, tie-breaker by depth (so parents are visited before their minimal child)
+            heapq.heappush(self.items, self._Tuple(((self.valuation(item),d), item)))
         else:
             heapq.heappush(self.standby, self._Tuple((d, item))) # Sorts by depth
 
