@@ -175,13 +175,16 @@ class Digits:
 
     def soln_gen(self):
         start_time = time.time()
-        while self.worklist.qsize() > 0: # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
+        # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
+        while True:
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
                 print(time.time()-start_time, "finished depth", self.depth)
+                if self.worklist.qsize() == 0: # We exhausted the search space, somehow
+                    break
                 self.depth += 1 # We handle comparing to self.max_depth in _add_children
-                # Actually, for now, let this be incomplete
+                # Let heuristic search be incomplete
                 if self.depth > self.max_depth:
                     break
                 self.worklist.depth = self.depth

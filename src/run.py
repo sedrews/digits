@@ -13,7 +13,7 @@ import numpy
 
 import time
 
-def run_benchmark(filename, max_depth, random_seed, opt_ratio, adapt, outfilename):
+def run_benchmark(filename, max_depth, random_seed, eval_sample_size, opt_ratio, adapt, outfilename):
     if random_seed is not None:
         random.seed(random_seed)
         numpy.random.seed(random_seed)
@@ -32,7 +32,6 @@ def run_benchmark(filename, max_depth, random_seed, opt_ratio, adapt, outfilenam
     
     s1 = Sampler(p.pre_exec)
     s2 = Sampler(p.pre_exec)
-    eval_sample_size = 2000
     # If we're controlling for random seed, prefetch all samples
     if random_seed is not None:
         s1.get(max_depth)
@@ -78,6 +77,8 @@ def parse_args():
                         help='Maximum depth of the search')
     parser.add_argument('-s', '--seed', required=False, type=int, default=None,
                         help='Set the random seed')
+    parser.add_argument('-sz', '--size', required=False, type=int, default=2000,
+                        help='The number of samples used in the sampling-based evaluator')
     parser.add_argument('-o', '--opt', required=False, type=float, default=1,
                         help='The ratio of the depth used as a Hamming distance threshold for the optimized search; when == 1, the search proceeds in level-order')
     parser.add_argument('-a', '--adapt', required=False, nargs=2, type=float, default=None,
@@ -90,4 +91,4 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    run_benchmark(args.file, args.depth, args.seed, args.opt, args.adapt, args.write)
+    run_benchmark(args.file, args.depth, args.seed, args.size, args.opt, args.adapt, args.write)
