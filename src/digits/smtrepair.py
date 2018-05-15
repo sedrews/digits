@@ -1,5 +1,6 @@
-from digits import *
 from z3 import *
+
+from digits import *
 
 
 class SMTSolution(Solution):

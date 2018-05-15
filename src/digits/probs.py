@@ -1,6 +1,7 @@
-from scipy.stats import norm
-from random import random
 from fractions import Fraction
+from random import random
+
+from scipy.stats import norm
 
 
 def gaussian(mean, variance):

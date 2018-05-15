@@ -1,14 +1,13 @@
-from digits import *
-
-from collections import namedtuple
-
-import sys
 import argparse
-
+from collections import namedtuple
 import random
+import sys
+import time
+
 import numpy
 
-import time
+from digits import *
+
 
 def run_benchmark(filename, max_depth, random_seed, eval_sample_size, opt_ratio, adapt, outfilename):
     if random_seed is not None:

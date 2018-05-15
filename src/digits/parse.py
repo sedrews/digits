@@ -1,7 +1,9 @@
 import ast
+from collections import namedtuple
+
 import astor
 from z3 import *
-from collections import namedtuple
+
 from .probs import prob_dict
 
 

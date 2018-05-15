@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-import heapq
 from functools import total_ordering
-
+import heapq
 import time
 
 # Using digits requires providing an implementation of

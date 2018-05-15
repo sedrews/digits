@@ -1,12 +1,12 @@
+import ast
+from itertools import product
 import unittest
 
-import ast
 import astor
-
-from digits.parse import *
 from z3 import *
 
-from itertools import product
+from digits.parse import *
+
 
 class TestParser(unittest.TestCase):
 
