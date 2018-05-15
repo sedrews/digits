@@ -2,7 +2,7 @@ import ast
 import astor
 from z3 import *
 from collections import namedtuple
-from probs import prob_dict
+from .probs import prob_dict
 
 
 def parse_fr(code_string):
@@ -432,54 +432,15 @@ def process_post_AST(node):
     eval(c, None, m)
     return m['post']
 
-if __name__=="__main__":
 
-    node = ast.parse('''
-def pre():
-    x = step([(-1, 1, 1)])
-    y = step([(-1, 1, 1)])
-    return x, y
+# TODO error detection:
+# Prob sampling should only be in pre
+# Ensure #args in D matches #returns in pre
+# Ensure the variable names introduced in D for holes don't have collisions
+# event() should only be in D
+# Ensure all events are event(string literal, bool exp)
+# Ensure post uses only defined events
 
-def D(x, y):
-    if Hole(-.5) < x and x < Hole(.7) and Hole(0) < y and y < Hole(1):
-        ret = 1
-    else:
-        ret = 0
-    event("neg_x", x < 0)
-    event("in_box", ret == 1)
-    return ret
-
-def post(Pr):
-    num = Pr({"in_box" : True, "neg_x" : True}) / Pr({"neg_x" : True})
-    den = Pr({"in_box" : True, "neg_x" : False}) / Pr({"neg_x" : False})
-    ratio = num / den
-    return ratio > 0.95
-    ''')
-
-    pre,D,post = separate_FR_AST(node)
-    pre_exec = process_pre_AST(pre)
-    for i in range(100):
-        print(pre_exec())
-    D_exec,hole_defaults,D_z3,z3_vars = process_D_AST(D)
-    print("D_z3?")
-    print(D_z3)
-    print("z3_vars?", z3_vars)
-    print("hole_defaults", hole_defaults)
-    print("some D_exec trials")
-    for i in range(10):
-        inputs = pre_exec()
-        outputs = D_exec(*[hole_defaults[1][h] for h in hole_defaults[0]], *inputs)
-        print("mapped", inputs, "to", outputs)
-    post_exec = process_post_AST(post)
-
-    # TODO error detection:
-    # Prob sampling should only be in pre
-    # Ensure #args in D matches #returns in pre
-    # Ensure the variable names introduced in D for holes don't have collisions
-    # event() should only be in D
-    # Ensure all events are event(string literal, bool exp)
-    # Ensure post uses only defined events
-
-    # TODO make an internal transformation of all program identifiers
-    # to some standard generic template -- this way, we can
-    # introduce variable names without worrying about conflict.
+# TODO make an internal transformation of all program identifiers
+# to some standard generic template -- this way, we can
+# introduce variable names without worrying about conflict.

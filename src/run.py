@@ -1,7 +1,4 @@
-from parse import parse_fr
-from digits import Digits, Sampler
-from smtrepair import SMTRepair
-from samplingevaluator import SamplingEvaluator
+from digits import *
 
 from collections import namedtuple
 
