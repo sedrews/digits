@@ -1,0 +1,19 @@
+def pre():
+    x = step([(-1, 1, 1)])
+    y = step([(-1, 1, 1)])
+    return x, y
+
+def D(x, y):
+    if Hole(-.5) < x and x < Hole(.7) and Hole(0) < y and y < Hole(1):
+        ret = 1
+    else:
+        ret = 0
+    event("neg_x", x < 0)
+    event("in_box", ret == 1)
+    return ret
+
+def post(Pr):
+    num = Pr({"in_box" : True, "neg_x" : True}) / Pr({"neg_x" : True})
+    den = Pr({"in_box" : True, "neg_x" : False}) / Pr({"neg_x" : False})
+    ratio = num / den
+    return ratio > 0.95
