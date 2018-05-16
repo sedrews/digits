@@ -245,7 +245,7 @@ class Z3Encoder(ast.NodeVisitor):
         assert isinstance(node.value, ast.Call), "Unexpected expression"
         return True
 
-    # These are always the event annotations
+    # These are always the event annotations (Fraction calls are taken care of in visit_Assign)
     def visit_Call(self, node):
         fn = node.func.id
         assert len(node.args) == 1
@@ -289,6 +289,8 @@ def exprToZ3(e):
             return BoolVal(False)
         else:
             return Real(e.id)
+    elif isCall(e) and e.func.id == 'Fraction':
+        return evalAST(e)
     else:
         assert False, "Weird expression" + ast.dump(e)
 
@@ -365,6 +367,8 @@ def process_D_AST(node):
 
     inputs = [a.arg for a in node.body[0].args.args]
 
+    FractionTransformer().visit(node)
+
     h = HoleCallTransformer()
     h.visit(node)
 
@@ -424,6 +428,24 @@ class HoleCallTransformer(ast.NodeTransformer):
             return ast.Name(id=name, ctx=ast.Load())
         else:
             return node
+
+
+class FractionTransformer(ast.NodeTransformer):
+
+    def visit_Call(self, node):
+        if node.func.id == 'Fraction':
+            args = [arg if isinstance(arg, ast.Num) else self.visit(arg) for arg in node.args]
+            node.args = args
+            return node
+        else:
+            node.func = self.visit(node.func)
+            node.args = [self.visit(arg) for arg in node.args]
+            node.keywords = [self.visit(kw) for kw in node.keywords]
+            return node
+
+    def visit_Num(self, node):
+        return ast.Call(func=ast.Name(id='Fraction', ctx=ast.Load()), \
+                        args=[node], keywords=[])
 
 
 def process_post_AST(node):
