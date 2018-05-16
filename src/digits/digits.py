@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from functools import total_ordering
+from functools import total_ordering, reduce
 import heapq
 import time
 
@@ -12,11 +12,11 @@ import time
 class Evaluator(ABC):
 
     @abstractmethod
-    def compute_post(self, prog):
+    def compute_post(self, prog, fast=True):
         pass
 
     @abstractmethod
-    def compute_error(self, prog):
+    def compute_error(self, prog, fast=True):
         pass
 
 
@@ -31,6 +31,9 @@ class RepairModel(ABC):
     @abstractmethod
     def make_solution(self, constraints):
         pass
+
+    def get_stats(self):
+        return []
 
 
 # Implementations of Evaluator and RepairModel need a common Solution class
@@ -147,6 +150,8 @@ class Digits:
         self.evaluator = evaluator
         self.outputs = outputs
         
+        self._best = None
+
         # Maintain an (auxiliary) explicit representation of the tree as a map from binary strings to nodes
         self.tree = {} # Note this will also include non-explored nodes in the worklist
         # The original program forms the root of the tree
@@ -169,17 +174,21 @@ class Digits:
 
         self.adaptive = adaptive # Whether to change self.hthresh dynamically
 
+    @property
+    def best(self):
+        return self._best
+
     def _get_threshold_func(self):
         return lambda d : self.hthresh * d # We use a fraction of the depth as the threshold
 
     def soln_gen(self):
-        start_time = time.time()
+        self.start_time = time.time()
         # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
         while True:
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
-                print(time.time()-start_time, "finished depth", self.depth)
+                self.log_event("finished depth", self.depth, "synthesizer stats", *self.repair_model.get_stats())
                 if self.worklist.qsize() == 0: # We exhausted the search space, somehow
                     break
                 self.depth += 1 # We handle comparing to self.max_depth in _add_children
@@ -204,18 +213,38 @@ class Digits:
                 leaf.solution = self.repair_model.make_solution(constraints)
                 if leaf.solution is not None:
                     self._add_children(leaf)
-                    leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog)
+
+                    leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast=True)
                     if leaf.solution.post: # Only compute error for correct solutions
-                        leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog)
-                        if self.adaptive is not None:
-                            self._update_hthresh(leaf.solution.error)
+                        leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog, fast=True)
+
+                        # See if we should update the best solution
+                        if self._best is None or leaf.solution.error < self._best.solution.error:
+                            # Do more rigorous checks
+                            leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast=False)
+                            leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog, fast=False)
+                            if leaf.solution.post and (self._best is None or leaf.solution.error < self._best.solution.error):
+                                self._best = leaf
+                                self.log_event("new best", self._best.solution.error, \
+                                        "path length", len(self._best.path), \
+                                        "valuation", self.worklist.valuation(self._best))
+                                if self.adaptive is not None:
+                                    # Update the search threshold
+                                    self._update_hthresh(leaf.solution.error)
             
             yield leaf
+
+        self.log_event("exited loop")
+
+    def log_event(self, *args):
+        for arg in args:
+            assert "," not in str(arg)
+        print(reduce(lambda x,y : str(x) + "," + str(y), [time.time()-self.start_time] + list(args)))
 
     def _update_hthresh(self, error):
         new_thresh = self.adaptive[0] * error + self.adaptive[1]
         if new_thresh < self.hthresh:
-            print("found correct soln with error", error, "; updating threshold to", new_thresh)
+            self.log_event("updated thresh", new_thresh)
             self.hthresh = new_thresh
             self.worklist.threshold = self._get_threshold_func()
 

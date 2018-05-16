@@ -40,6 +40,13 @@ class SMTRepair(RepairModel):
                        'pruned:' + str(self.pruned)
         self.stats = Stats()
 
+    def get_stats(self):
+        return ["calls", str(self.stats.calls), \
+                "smt", str(self.stats.smt), \
+                "sat", str(self.stats.sat), \
+                "unsat", str(self.stats.unsat), \
+                "pruned", str(self.stats.pruned)]
+
     # constraints maps each input Sample to an ouput (stored as a list of tuples) --
     # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):

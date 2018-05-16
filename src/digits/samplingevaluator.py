@@ -3,14 +3,18 @@ from digits import *
 
 class SamplingEvaluator(Evaluator):
 
-    def __init__(self, sampler, post, orig_prog, num_samples=2000):
+    # Default numbers of samples are chosen such that Hoeffding bounds give:
+    # 73778 samples -> 95% confidence of within .005
+    # 10000 samples -> 95% confidence of within .0136
+    def __init__(self, sampler, post, orig_prog, fast_num=10000, num=73778):
         self.post = post
         self.sampler = sampler
         self.orig_prog = orig_prog
-        self.num_samples = num_samples
+        self.fast_num = fast_num
+        self.num = num
 
-    def compute_post(self, prog):
-        samples = [self.sampler.get(j) for j in range(self.num_samples)]
+    def compute_post(self, prog, fast=True):
+        samples = [self.sampler.get(j) for j in range(self.fast_num if fast else self.num)]
         trials = [prog.event_call(*sample) for sample in samples] # prog is parse.EventFunc
         event_map = {}
         def Pr(event):
@@ -25,7 +29,7 @@ class SamplingEvaluator(Evaluator):
                             break
                     if flag:
                         counter += 1
-                event_map[t] = counter / self.num_samples
+                event_map[t] = counter / len(samples)
             return event_map[t]
         try:
             res = self.post(Pr)
@@ -33,9 +37,9 @@ class SamplingEvaluator(Evaluator):
             res = False # For now -- in the future could use tristate
         return res
 
-    def compute_error(self, prog):
-        samples = [self.sampler.get(j) for j in range(self.num_samples)]
+    def compute_error(self, prog, fast=True):
+        samples = [self.sampler.get(j) for j in range(self.fast_num if fast else self.num)]
         counter = 0
         for sample in samples:
             counter += 1 if prog(*sample) != self.orig_prog(*sample) else 0
-        return counter / self.num_samples
+        return counter / len(samples)
