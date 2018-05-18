@@ -2,6 +2,7 @@ import ast
 from collections import namedtuple
 
 import astor
+from gmpy2 import mpq
 from z3 import *
 
 from .probs import prob_dict
@@ -245,7 +246,7 @@ class Z3Encoder(ast.NodeVisitor):
         assert isinstance(node.value, ast.Call), "Unexpected expression"
         return True
 
-    # These are always the event annotations (Fraction calls are taken care of in visit_Assign)
+    # These are always the event annotations (Fraction/mpq calls are taken care of in visit_Assign)
     def visit_Call(self, node):
         fn = node.func.id
         assert len(node.args) == 1
@@ -289,7 +290,7 @@ def exprToZ3(e):
             return BoolVal(False)
         else:
             return Real(e.id)
-    elif isCall(e) and e.func.id == 'Fraction':
+    elif isCall(e) and e.func.id == 'mpq':
         return evalAST(e)
     else:
         assert False, "Weird expression" + ast.dump(e)
@@ -312,7 +313,7 @@ class FractionFunc:
         vals = self.func()
         if type(vals) is not tuple:
             vals = (vals,)
-        return tuple(Fraction(val) for val in vals)
+        return tuple(mpq(val) for val in vals)
 
 
 class EventFunc:
@@ -433,7 +434,7 @@ class HoleCallTransformer(ast.NodeTransformer):
 class FractionTransformer(ast.NodeTransformer):
 
     def visit_Call(self, node):
-        if node.func.id == 'Fraction':
+        if node.func.id == 'mpq':
             args = [arg if isinstance(arg, ast.Num) else self.visit(arg) for arg in node.args]
             node.args = args
             return node
@@ -444,7 +445,7 @@ class FractionTransformer(ast.NodeTransformer):
             return node
 
     def visit_Num(self, node):
-        return ast.Call(func=ast.Name(id='Fraction', ctx=ast.Load()), \
+        return ast.Call(func=ast.Name(id='mpq', ctx=ast.Load()), \
                         args=[node], keywords=[])
 
 
