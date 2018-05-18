@@ -9,12 +9,12 @@ class SamplingEvaluator(Evaluator):
     # Default numbers of samples are chosen such that Hoeffding bounds give:
     # 73778 samples -> 95% confidence of within .005
     # 10000 samples -> 95% confidence of within .0136
-    def __init__(self, sampler, post, orig_prog, fast_num=10000, num=73778):
+    def __init__(self, sampler, post, orig_prog, num=(10000,73778)):
         self.post = post
         self.sampler = sampler
         self.orig_prog = orig_prog
-        self.fast_num = fast_num
-        self.num = num
+        self.fast_num = num[0]
+        self.num = num[1]
 
         class Stats:
             def __init__(self):

@@ -33,18 +33,26 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
         s1.get(max_depth)
         s2.get(eval_sample_size[1])
 
-    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, fast_num=eval_sample_size[0], num=eval_sample_size[1])
+    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, eval_sample_size)
 
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt)
     soln_gen = d.soln_gen()
 
     start = time.time()
-    while timeout is None or (time.time() - start < timeout):
+    while True:
         try:
             n = next(soln_gen)
         except StopIteration:
             break
-    d.log_event("best holes", *[float(hole) for hole in d.best.solution.holes])
+        if timeout is not None and time.time() - start > timeout:
+            d.log_event("timed out")
+            break
+    if d.best is not None:
+        d.log_event("best", \
+                    "error", d.best.solution.error, \
+                    "holes", *[float(hole) for hole in d.best.solution.holes])
+    else:
+        d.log_event("no solutions found")
 
 def parse_args():
     parser = argparse.ArgumentParser()
