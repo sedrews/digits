@@ -1,3 +1,4 @@
+from gmpy2 import mpq
 from z3 import *
 
 from digits import *
@@ -106,7 +107,7 @@ class SMTRepair(RepairModel):
 
     def holes_from_model(self, model):
         #return self.Holes(*[model[Real(attr)].as_fraction() for attr in self.Holes._fields])
-        return self.Holes(*[model.evaluate(Real(attr), model_completion=True).as_fraction() \
+        return self.Holes(*[mpq(model.evaluate(Real(attr), model_completion=True).as_fraction()) \
                             for attr in self.Holes._fields])
 
     def sanity_check(self, soln, constraints):
