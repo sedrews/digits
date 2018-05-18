@@ -3,6 +3,7 @@ from functools import total_ordering, reduce
 import heapq
 import time
 
+
 # Using digits requires providing an implementation of
 #   1) Evaluator -- a way to check the postcondition and compute the error function
 #   2) RepairModel -- turn constraints into consistent programs
@@ -19,6 +20,8 @@ class Evaluator(ABC):
     def compute_error(self, prog, fast=True):
         pass
 
+    def get_stats(self):
+        return []
 
 class RepairModel(ABC):
 
@@ -141,6 +144,9 @@ class Node:
 class Digits:
 
     def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1, adaptive=None):
+
+        self.start_time = time.time()
+
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -182,13 +188,15 @@ class Digits:
         return lambda d : self.hthresh * d # We use a fraction of the depth as the threshold
 
     def soln_gen(self):
-        self.start_time = time.time()
+        self.log_event("entered generator")
         # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
         while True:
 
             leaf = self.worklist.get()
             if leaf is None: # We need to expand the depth of the search
-                self.log_event("finished depth", self.depth, "synthesizer stats", *self.repair_model.get_stats())
+                self.log_event("finished depth", self.depth)
+                self.log_event("synthesizer stats", *self.repair_model.get_stats())
+                self.log_event("evaluator stats", *self.evaluator.get_stats())
                 if self.worklist.qsize() == 0: # We exhausted the search space, somehow
                     break
                 self.depth += 1 # We handle comparing to self.max_depth in _add_children
@@ -213,29 +221,35 @@ class Digits:
                 leaf.solution = self.repair_model.make_solution(constraints)
                 if leaf.solution is not None:
                     self._add_children(leaf)
+                    self._evaluate(leaf, fast=True)
+                    if self._check_best(leaf): # If it looks like we should update the best solution
+                        # First be more precise
+                        self._evaluate(leaf, fast=False)
+                        if self._check_best(leaf): # If it still looks like it, do so
+                            self._best = leaf
+                            self.log_event("new best", self._best.solution.error, \
+                                    "path length", len(self._best.path), \
+                                    "valuation", self.worklist.valuation(self._best))
+                            if self.adaptive is not None:
+                                # Update the search threshold
+                                self._update_hthresh(leaf.solution.error)
 
-                    leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast=True)
-                    if leaf.solution.post: # Only compute error for correct solutions
-                        leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog, fast=True)
-
-                        # See if we should update the best solution
-                        if self._best is None or leaf.solution.error < self._best.solution.error:
-                            # Do more rigorous checks
-                            leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast=False)
-                            leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog, fast=False)
-                            if leaf.solution.post and (self._best is None or leaf.solution.error < self._best.solution.error):
-                                self._best = leaf
-                                self.log_event("new best", self._best.solution.error, \
-                                        "path length", len(self._best.path), \
-                                        "valuation", self.worklist.valuation(self._best))
-                                if self.adaptive is not None:
-                                    # Update the search threshold
-                                    self._update_hthresh(leaf.solution.error)
-            
+            # Always yield what was done at this round
             yield leaf
 
-        self.log_event("exited loop")
+        self.log_event("exhausted generator")
 
+    def _evaluate(self, leaf, fast):
+        leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast)
+        if leaf.solution.post: # Only compute error for correct solutions
+            leaf.solution.error = self.evaluator.compute_error(leaf.solution.prog, fast)
+
+    def _check_best(self, leaf):
+        if leaf.solution.post:
+            if self._best is None or leaf.solution.error < self._best.solution.error:
+                return True
+        return False
+            
     def log_event(self, *args):
         for arg in args:
             assert "," not in str(arg)

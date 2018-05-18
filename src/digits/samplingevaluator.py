@@ -1,3 +1,6 @@
+from itertools import chain
+import time
+
 from digits import *
 
 
@@ -13,7 +16,31 @@ class SamplingEvaluator(Evaluator):
         self.fast_num = fast_num
         self.num = num
 
+        class Stats:
+            def __init__(self):
+                self.post_calls = {True : 0, False : 0}
+                self.post_time = {True : 0, False : 0}
+                self.error_calls = {True : 0, False : 0}
+                self.error_time = {True : 0, False : 0}
+            def as_array(self):
+                return [("fast_post_calls", self.post_calls[True]), \
+                        ("fast_post_time", self.post_time[True]), \
+                        ("fast_error_calls", self.error_calls[True]), \
+                        ("fast_error_time", self.error_time[True]), \
+                        ("slow_post_calls", self.post_calls[False]), \
+                        ("slow_post_time", self.post_time[False]), \
+                        ("slow_error_calls", self.error_calls[False]), \
+                        ("slow_error_time", self.error_time[False])]
+            def __str__(self):
+                return reduce(lambda x,y: x + y, [p[0]+":"+str(p[1]) for p in self.as_array()])
+        self.stats = Stats()
+
+    def get_stats(self):
+        return [str(i) for i in chain(*self.stats.as_array())]
+
     def compute_post(self, prog, fast=True):
+        start_time = time.time()
+        self.stats.post_calls[fast] += 1
         samples = [self.sampler.get(j) for j in range(self.fast_num if fast else self.num)]
         trials = [prog.event_call(*sample) for sample in samples] # prog is parse.EventFunc
         event_map = {}
@@ -35,11 +62,15 @@ class SamplingEvaluator(Evaluator):
             res = self.post(Pr)
         except ZeroDivisionError: # Since post might contain conditional probabilities
             res = False # For now -- in the future could use tristate
+        self.stats.post_time[fast] += time.time() - start_time
         return res
 
     def compute_error(self, prog, fast=True):
+        start_time = time.time()
+        self.stats.error_calls[fast] += 1
         samples = [self.sampler.get(j) for j in range(self.fast_num if fast else self.num)]
         counter = 0
         for sample in samples:
             counter += 1 if prog(*sample) != self.orig_prog(*sample) else 0
+        self.stats.error_time[fast] += time.time() - start_time
         return counter / len(samples)

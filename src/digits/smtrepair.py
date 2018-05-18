@@ -1,3 +1,7 @@
+from functools import reduce
+from itertools import chain
+import time
+
 from gmpy2 import mpq
 from z3 import *
 
@@ -33,25 +37,37 @@ class SMTRepair(RepairModel):
                 self.sat = 0
                 self.unsat = 0
                 self.pruned = 0
+                self.make_time = 0 # Includes sanity_time
+                self.sanity_time = 0
+                self._total_constraints = 0
+            @property
+            def avg_num_constraints(self):
+                try:
+                    return self._total_constraints / self.calls
+                except ZeroDivisionError:
+                    return 0
+            def as_array(self):
+                return [("calls", self.calls), \
+                        ("smt", self.smt), \
+                        ("sat", self.sat), \
+                        ("unsat", self.unsat), \
+                        ("pruned", self.pruned), \
+                        ("make_time", self.make_time), \
+                        ("sanity_time", self.sanity_time), \
+                        ("avg_num_constraints", self.avg_num_constraints)]
             def __str__(self):
-                return 'calls:' + str(self.calls) + ', ' + \
-                       'smt:' + str(self.smt) + ', ' + \
-                       'sat:' + str(self.sat) + ', ' + \
-                       'unsat:' + str(self.unsat) + ', ' + \
-                       'pruned:' + str(self.pruned)
+                return reduce(lambda x,y: x + y, [p[0]+":"+str(p[1]) for p in self.as_array()])
         self.stats = Stats()
 
     def get_stats(self):
-        return ["calls", str(self.stats.calls), \
-                "smt", str(self.stats.smt), \
-                "sat", str(self.stats.sat), \
-                "unsat", str(self.stats.unsat), \
-                "pruned", str(self.stats.pruned)]
+        return [str(i) for i in chain(*self.stats.as_array())]
 
     # constraints maps each input Sample to an ouput (stored as a list of tuples) --
     # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):
+        start_make_time = time.time()
         self.stats.calls += 1
+        self.stats._total_constraints += len(constraints)
         # Try unsat core pruning
         if self.unsat_cores.check_match([c[1] for c in constraints]):
             self.stats.pruned += 1
@@ -75,7 +91,9 @@ class SMTRepair(RepairModel):
             soln = self.sketch.partial_evaluate(*hole_values)
             try:
                 # Make sure the synthesized program is consistent with constraints
+                start_sanity_time = time.time()
                 self.sanity_check(soln, constraints)
+                self.stats.sanity_time += time.time() - start_sanity_time
             except AssertionError as e:
                 print("sanity check failed:")
                 print(e)
@@ -85,6 +103,7 @@ class SMTRepair(RepairModel):
                 print("solver", s)
                 print("model", s.model())
                 exit(1)
+            self.stats.make_time += time.time() - start_make_time
             return SMTSolution(prog=soln, holes=hole_values)
         else: # unsat
             self.stats.unsat += 1
@@ -96,6 +115,7 @@ class SMTRepair(RepairModel):
                 # Represent as a list of (constraint number, specified output)
                 core = [(v,constraints[v][1]) for v in core]
                 self.unsat_cores.add_core(core)
+            self.stats.make_time += time.time() - start_make_time
             return None
 
     # constraint is a tuple of (Sample, output) where Sample is an input tuple
