@@ -31,10 +31,9 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
     
     s1 = Sampler(p.pre_exec)
     s2 = Sampler(p.pre_exec)
-    # If we're controlling for random seed, prefetch all samples
-    if random_seed is not None:
-        s1.get(max_depth)
-        s2.get(eval_sample_size[1])
+    # Prefetch all samples (controls randomness when search order changes)
+    s1.get(max_depth)
+    s2.get(eval_sample_size[1])
 
     evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, eval_sample_size)
 
