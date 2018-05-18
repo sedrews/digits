@@ -10,6 +10,9 @@ from digits import *
 
 
 def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt):
+
+    start = time.time()
+
     if random_seed is not None:
         random.seed(random_seed)
         numpy.random.seed(random_seed)
@@ -34,6 +37,8 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
         s2.get(eval_sample_size[1])
 
     evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, eval_sample_size)
+
+    print("initial overhead,",time.time() - start)
 
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt)
     soln_gen = d.soln_gen()
