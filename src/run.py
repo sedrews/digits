@@ -2,13 +2,14 @@ import argparse
 from collections import namedtuple
 import random
 import sys
+import time
 
 import numpy
 
 from digits import *
 
 
-def run_benchmark(filename, max_depth, random_seed, eval_sample_size, opt_ratio, adapt):
+def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt):
     if random_seed is not None:
         random.seed(random_seed)
         numpy.random.seed(random_seed)
@@ -37,7 +38,8 @@ def run_benchmark(filename, max_depth, random_seed, eval_sample_size, opt_ratio,
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt)
     soln_gen = d.soln_gen()
 
-    while True:
+    start = time.time()
+    while timeout is None or (time.time() - start < timeout):
         try:
             n = next(soln_gen)
         except StopIteration:
@@ -50,6 +52,8 @@ def parse_args():
                         help='Input .fr file')
     parser.add_argument('-d', '--depth', required=True, type=int,
                         help='Maximum depth of the search')
+    parser.add_argument('-t', '--time', required=False, type=int, default=None,
+                        help='Timeout (seconds) for the search')
     parser.add_argument('-s', '--seed', required=False, type=int, default=None,
                         help='Set the random seed')
     parser.add_argument('-sz', '--size', required=False, nargs=2, type=int, default=(10000,73778),
@@ -62,4 +66,4 @@ def parse_args():
 
 if __name__ == '__main__':
     args = parse_args()
-    run_benchmark(args.file, args.depth, args.seed, args.size, args.opt, args.adapt)
+    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt)
