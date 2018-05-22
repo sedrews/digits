@@ -73,6 +73,20 @@ def synthcallsvstime(runs, names):
     plt.xlabel("total time (s)")
     plt.axis([0, 600, 0, None])
 
+# The growth of the sampleset as a function of depth
+def growthvsdepth(runs, names):
+    for run in runs:
+        xs = []
+        ys = []
+        for s in run.synthstats:
+            xs.append(s.depth)
+            ys.append(s.stats.sat)
+        plt.plot(xs,ys)
+    plt.legend(names)
+    plt.ylabel("growth (total satisfiable synthesis queries)")
+    plt.xlabel("depth")
+    plt.axis([0, None, 0, None])
+
 def plotbench(title, prefix, vals, suffix):
     fnames = [prefix + val + suffix for val in vals]
     runs = [RunStats(f) for f in fnames]
@@ -86,6 +100,9 @@ def plotbench(title, prefix, vals, suffix):
     synthcallsvstime(runs, vals)
     plt.subplot(2,3,6)
     synthcallsvsdepth(runs, vals)
+    # Growth function only needs the -o 1 version
+    plt.subplot(2,3,4)
+    growthvsdepth([runs[0]],[vals[0]])
     plt.suptitle(title)
 
 if __name__ == '__main__':
