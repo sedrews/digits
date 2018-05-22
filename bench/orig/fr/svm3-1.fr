@@ -1,0 +1,35 @@
+def pre():
+    sex = step([(0,1,0.3307), (1,2,0.6693)])
+    if sex < 1:
+        capital_gain = gaussian(568.4105, 24248365.5428)
+        if capital_gain < 7298.0000:
+            age = gaussian(38.4208, 184.9151)
+        else:
+            age = gaussian(38.8125, 193.4918)
+    else:
+        capital_gain = gaussian(1329.3700, 69327473.1006)
+        if capital_gain < 5178.0000:
+            age = gaussian(38.6361, 187.2435)
+        else:
+            age = gaussian(38.2668, 187.2747)
+    return sex, age, capital_gain
+
+def D(sex, age, capital_gain):
+    event("minority", sex < 1)
+    N_age = (age - 17.0) / 62.0
+    N_capital_gain = (capital_gain - 0.0) / 22040.0
+    t = -0.0008 * N_age + -5.7337 * N_capital_gain + Hole(1.0003)
+    if sex > 1:
+        t = t + 0.0001
+    event("hired", t < 0)
+    if t < 0:
+        ret = 1
+    else:
+        ret = 0
+    return ret
+
+def post(Pr):
+    num = Pr({"hired" : True, "minority" : True}) / Pr({"minority" : True})
+    den = Pr({"hired" : True, "minority" : False}) / Pr({"minority" : False})
+    ratio = num / den
+    return ratio > 0.85
