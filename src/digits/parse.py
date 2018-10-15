@@ -13,12 +13,12 @@ def parse_fr(code_string):
 
     pre,D,post = separate_FR_AST(node)
     pre_exec = process_pre_AST(pre)
-    D_exec,hole_defaults,D_z3,z3_vars = process_D_AST(D)
+    D_exec,hole_data,D_z3,z3_vars = process_D_AST(D)
     post_exec = process_post_AST(post)
 
-    ParsedFR = namedtuple('ParsedFR', ['pre_exec', 'D_exec', 'hole_defaults', 'D_z3', 'z3_vars', 'post_exec'])
+    ParsedFR = namedtuple('ParsedFR', ['pre_exec', 'D_exec', 'hole_data', 'D_z3', 'z3_vars', 'post_exec'])
 
-    return ParsedFR(pre_exec, D_exec, hole_defaults, D_z3, z3_vars, post_exec)
+    return ParsedFR(pre_exec, D_exec, hole_data, D_z3, z3_vars, post_exec)
 
 
 # helpers
@@ -399,6 +399,9 @@ def process_D_AST(node):
     return wrapped,(h.holes, h.hole_map),phi,zt
 
 
+HoleInfo = namedtuple('HoleInfo', ['name', 'default', 'bounds'])
+
+
 class HoleCallTransformer(ast.NodeTransformer):
 
     def __init__(self):
@@ -421,11 +424,16 @@ class HoleCallTransformer(ast.NodeTransformer):
 
     def visit_Call(self, node):
         if node.func.id == "Hole":
-            assert len(node.args) == 1
-            arg = evalAST(node.args[0])
+            assert len(node.args) == 1 or len(node.args) == 2
+            default = evalAST(node.args[0])
+            if len(node.args) == 2:
+                bounds = evalAST(node.args[1])
+                assert len(bounds) == 2 and (bounds[0] is None or bounds[1] is None or bounds[0] < bounds[1]) # Intended to be (lower,upper)
+            else:
+                bounds = None
             name = self.next_name()
             self.holes.append(name)
-            self.hole_map[name] = arg
+            self.hole_map[name] = HoleInfo(name, default, bounds)
             return ast.Name(id=name, ctx=ast.Load())
         else:
             return node

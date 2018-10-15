@@ -22,12 +22,13 @@ class SMTRepair(RepairModel):
     # input_variables is a list of the z3 variable objects (in the same order as in Sample and in function header)
     # output_variable is the z3 variable object for the return value
     # Holes is a named tuple whose fields are the hole variable names
-    def __init__(self, sketch, template, input_variables, output_variable, Holes):
+    def __init__(self, sketch, template, input_variables, output_variable, Holes, hole_bounds=None):
         self.sketch = sketch
         self.template = template
         self.input_variables = input_variables
         self.output_variable = output_variable
         self.Holes = Holes
+        self.hole_bounds = hole_bounds
 
         self.unsat_cores = CoreStore()
         class Stats:
@@ -80,6 +81,15 @@ class SMTRepair(RepairModel):
         # Do actual synthesis work
         self.stats.smt += 1
         s = Solver()
+        if self.hole_bounds is not None:
+            for hole in self.Holes._fields:
+                if self.hole_bounds[hole] is not None:
+                    lb = self.hole_bounds[hole][0]
+                    ub = self.hole_bounds[hole][1]
+                    if lb is not None:
+                        s.add(Real(hole) >= lb)
+                    if ub is not None:
+                        s.add(Real(hole) <= ub)
         for i in range(len(constraints)):
             constraint = constraints[i]
             conj_id = 'p' + str(i) # XXX this could collide with variable names

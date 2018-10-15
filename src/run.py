@@ -22,10 +22,11 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
     f.close()
     p = parse_fr(prog_string)
 
-    Holes = namedtuple('Holes', p.hole_defaults[0])
-    H_default = Holes(**p.hole_defaults[1])
+    Holes = namedtuple('Holes', p.hole_data[0])
+    H_default = Holes(**{hole : p.hole_data[1][hole].default for hole in p.hole_data[0]})
+    H_bounds = {hole : p.hole_data[1][hole].bounds for hole in p.hole_data[0]}
 
-    repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes)
+    repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes, H_bounds)
 
     orig_prog = p.D_exec.partial_evaluate(*H_default)
     
