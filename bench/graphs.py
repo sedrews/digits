@@ -29,6 +29,7 @@ def bestvstime(runs, names):
     plt.legend(names)
     plt.ylabel("best error")
     plt.xlabel("total time (s)")
+    plt.xscale('log')
     plt.axis([0, 600, 0, 1])
 
 # Plot best solution as a function of depth
