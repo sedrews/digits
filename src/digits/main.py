@@ -23,6 +23,7 @@ class Evaluator(ABC):
     def get_stats(self):
         return []
 
+
 class RepairModel(ABC):
 
     # Can override this to do something more sophisticated
@@ -71,60 +72,37 @@ class Sampler:
         return self.samples[n]
 
 
-class _HeapQueue:
+class Frontier:
+    
+    def __init__(self):
+        self.valuation = None
+        self.threshold = None
+        self._items = list()
+        self._active_gen = False # Please don't append to self.items while iterating over it
+        self.pending = list()
 
-    # heapq.heappush(tuple) seems to sort tuples lexicographically
-    # -- we want to sort only by valuation stored at [0] as otherwise all elements need a comparator
-    @total_ordering
-    class _Tuple(tuple):
-        def __eq__(self, other):
-            if not isinstance(other, _HeapQueue._Tuple):
-                return NotImplemented
-            return self[0].__eq__(other[0])
-        def __lt__(self, other):
-            if not isinstance(other, _HeapQueue._Tuple):
-                return NotImplemented
-            return self[0].__lt__(other[0])
+    # Respects changes to valuation and threshold mid-generator
+    def unblocked_generator(self):
+        self._active_gen = True
+        i = 0
+        while True:
+            if i >= len(self._items):
+                break
+            item = self._items[i]
+            if self.valuation(item) < self.threshold:
+                del self._items[i]
+                i -= 1
+                yield item
+            i += 1
+        self._active_gen = False
 
-    def __init__(self, depth=None, valuation=None, threshold=None):
-        self.items = [] # Stored as (valuation, item) but wrapped in _Tuple
-        self._depth = depth
-        self.valuation = valuation # A function : node -> numeric
-        self.threshold = threshold # A function : depth -> numeric
-        self.standby = [] # Stored as (depth, item) but wrapped in _Tuple
+    def add_items(self, items):
+        assert not self._active_gen, "Please don't append to items during unblocked_generator"
+        self._items.extend(items)
 
-    @property
-    def depth(self):
-        return self._depth
-    @depth.setter
-    def depth(self, value):
-        assert self._depth <= value
-        self._depth = value
-        # When we expand the depth, some new nodes can be considered
-        while len(self.standby) > 0 and self.standby[0][0] <= self._depth:
-            self.put(heapq.heappop(self.standby)[1])
-
-
-    def qsize(self):
-        return len(self.items) + len(self.standby)
-
-    # Returns the least item that passes the threshold (or None if none pass)
-    def get(self):
-        # Recall self.items[n] = (valuation, item)
-        if len(self.items) > 0 and self.items[0][0][0] <= self.threshold(self._depth):
-            ret = heapq.heappop(self.items)
-            #print("popped item with valuation", ret[0])
-            return ret[1]
-        else:
-            return None
-
-    def put(self, item):
-        d = len(item.path)
-        if d <= self._depth:
-            # Sorts by valuation, tie-breaker by depth (so parents are visited before their minimal child)
-            heapq.heappush(self.items, self._Tuple(((self.valuation(item),d), item)))
-        else:
-            heapq.heappush(self.standby, self._Tuple((d, item))) # Sorts by depth
+    def queue_pending(self):
+        self.add_items(self.pending)
+        self.pending = list()
 
 
 class Node:
@@ -165,7 +143,7 @@ class Digits:
         self.tree[()] = self.root
 
         self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
-        self.depth = 0 # Bounds the largest constraint string explored (dynamically increases)
+        self.depth = 1 # Bounds the largest constraint string explored (dynamically increases)
 
         assert self.max_depth is not None # XXX reproducing random seed results is hard if future samples depend on what has happened during the search
         self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
@@ -174,8 +152,10 @@ class Digits:
         self.hthresh = hthresh # Hamming distance heuristic threshold (default 1 => level-order traversal)
         # Nodes are sorted by their Hamming distance from the original program
         hamming_count = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
-        # worklist contains (yet-unexplored) children of existing leaves
-        self.worklist = _HeapQueue(self.depth, hamming_count, self._get_threshold_func())
+        # frontier contains (yet-unexplored) children of existing leaves
+        self.frontier = Frontier()
+        self.frontier.valuation = hamming_count
+        self.frontier.threshold = self._current_threshold()
         self._add_children(self.root)
 
         self.adaptive = adaptive # Whether to change self.hthresh dynamically
@@ -184,60 +164,60 @@ class Digits:
     def best(self):
         return self._best
 
-    def _get_threshold_func(self):
-        return lambda d : self.hthresh * d # We use a fraction of the depth as the threshold
-
     def soln_gen(self):
         self.log_event("entered generator")
-        # XXX Never terminates if worklist threshold always blocks some nodes and no max depth is set
+
+        # XXX Won't terminate (but should) if all leaves are unsat
         while True:
-
-            leaf = self.worklist.get()
-            if leaf is None: # We need to expand the depth of the search
-                self.log_event("finished depth", self.depth)
-                self.log_event("synthesizer stats", *self.repair_model.get_stats())
-                self.log_event("evaluator stats", *self.evaluator.get_stats())
-                if self.worklist.qsize() == 0: # We exhausted the search space, somehow
-                    break
-                self.depth += 1 # We handle comparing to self.max_depth in _add_children
-                # Let heuristic search be incomplete
-                if self.depth > self.max_depth:
-                    break
-                self.worklist.depth = self.depth
-                continue
-
-            # Handle solution propagation
-            parent = leaf.parent
-            if parent.propto is None:
-                # Run the parent program to see which child receives propagation (and cache)
-                val = parent.solution.prog(*self.sampler.get(len(leaf.path) - 1))
-                parent.propto = val
-
-            if leaf.path[-1] == parent.propto: # We can propagate the solution
-                leaf.solution = parent.solution
-                self._add_children(leaf)
-            else: # We have to compute a solution (if one exists)
-                constraints = self._constraint_list(leaf.path)
-                leaf.solution = self.repair_model.make_solution(constraints)
-                if leaf.solution is not None:
+            for leaf in self.frontier.unblocked_generator():
+                if self._check_solution_propagation(leaf): # We can propagate the solution
+                    leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
-                    self._evaluate(leaf, fast=True)
-                    if self._check_best(leaf): # If it looks like we should update the best solution
-                        # First be more precise
-                        self._evaluate(leaf, fast=False)
-                        if self._check_best(leaf): # If it still looks like it, do so
-                            self._best = leaf
-                            self.log_event("new best", self._best.solution.error, \
-                                    "path length", len(self._best.path), \
-                                    "valuation", self.worklist.valuation(self._best))
-                            if self.adaptive is not None:
-                                # Update the search threshold
-                                self._update_hthresh(leaf.solution.error)
+                else: # We have to compute a solution (if one exists)
+                    constraints = self._constraint_list(leaf.path)
+                    leaf.solution = self.repair_model.make_solution(constraints)
+                    if leaf.solution is not None:
+                        # Handle computing error, updating best, etc
+                        self._process_solution(leaf)
+                        self._add_children(leaf)
+                # Always yield what was done at this round
+                yield leaf
 
-            # Always yield what was done at this round
-            yield leaf
+            self.log_event("finished depth", self.depth)
+            self.log_event("synthesizer stats", *self.repair_model.get_stats())
+            self.log_event("evaluator stats", *self.evaluator.get_stats())
+            # We need to expand the depth of the search now that all unblocked are exhausted
+            self.depth += 1
+            self.frontier.queue_pending()
+            self.frontier.threshold = self._current_threshold()
+            if self.depth > self.max_depth:
+                break
 
         self.log_event("exhausted generator")
+
+    def _check_solution_propagation(self, leaf):
+        parent = leaf.parent
+        if parent.propto is None:
+            # Run the parent program to see which child receives propagation (and cache)
+            val = parent.solution.prog(*self.sampler.get(len(leaf.path) - 1))
+            parent.propto = val
+        return leaf.path[-1] == parent.propto
+
+    def _process_solution(self, leaf):
+        assert leaf.solution is not None
+        self._evaluate(leaf, fast=True)
+        if self._check_best(leaf): # If it looks like we should update the best solution
+            # First be more precise
+            self._evaluate(leaf, fast=False)
+            if self._check_best(leaf): # If it still looks like it, do so
+                self._best = leaf
+                self.log_event("new best", self._best.solution.error, \
+                        "path length", len(self._best.path), \
+                        "valuation", self.frontier.valuation(self._best))
+                if self.adaptive is not None:
+                    # Update the search threshold
+                    self._update_hthresh(leaf.solution.error)
+
 
     def _evaluate(self, leaf, fast):
         leaf.solution.post = self.evaluator.compute_post(leaf.solution.prog, fast)
@@ -260,7 +240,10 @@ class Digits:
         if new_thresh < self.hthresh:
             self.log_event("updated thresh", new_thresh)
             self.hthresh = new_thresh
-            self.worklist.threshold = self._get_threshold_func()
+            self.frontier.threshold = self._current_threshold()
+
+    def _current_threshold(self):
+        return self.depth * self.hthresh
 
     def _add_children(self, parent):
         # Only add the children if they are at a depth we would consider
@@ -268,7 +251,7 @@ class Digits:
             for value in self.outputs:
                 child = Node(path=parent.path+(value,), parent=parent)
                 parent.children[value] = child
-                self.worklist.put(child)
+                self.frontier.pending.append(child)
                 self.tree[child.path] = child
 
     def _constraint_list(self, path):
