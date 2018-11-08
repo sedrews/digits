@@ -1,7 +1,7 @@
 from itertools import chain
 import time
 
-from digits import *
+from .main import *
 
 
 class SamplingEvaluator(Evaluator):

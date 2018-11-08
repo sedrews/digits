@@ -5,7 +5,7 @@ import time
 from gmpy2 import mpq
 from z3 import *
 
-from digits import *
+from .main import *
 
 
 class SMTSolution(Solution):
