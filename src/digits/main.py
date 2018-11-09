@@ -77,32 +77,22 @@ class Frontier:
     def __init__(self):
         self.valuation = None
         self.threshold = None
-        self._items = list()
-        self._active_gen = False # Please don't append to self.items while iterating over it
-        self.pending = list()
+        self.depth = None
+        self.items = list()
 
-    # Respects changes to valuation and threshold mid-generator
+    # Respects changes to parameters mid-generator
     def unblocked_generator(self):
-        self._active_gen = True
         i = 0
         while True:
-            if i >= len(self._items):
+            if i >= len(self.items):
                 break
-            item = self._items[i]
-            if self.valuation(item) < self.threshold:
-                del self._items[i]
+            item = self.items[i]
+            if len(item.path) <= self.depth and self.valuation(item) <= self.threshold:
+                del self.items[i]
                 i -= 1
                 yield item
             i += 1
         self._active_gen = False
-
-    def add_items(self, items):
-        assert not self._active_gen, "Please don't append to items during unblocked_generator"
-        self._items.extend(items)
-
-    def queue_pending(self):
-        self.add_items(self.pending)
-        self.pending = list()
 
 
 class Node:
@@ -133,43 +123,47 @@ class Digits:
         self.repair_model = repair_model
         self.evaluator = evaluator
         self.outputs = outputs
-        
+
+        # We only consider constraint strings with at most this length (inclusive)
+        self.max_depth = max_depth
+        # Hamming distance heuristic threshold (default 1 => level-order traversal)
+        self.hthresh = hthresh
+        # Whether to change self.hthresh dynamically
+        self.adaptive = adaptive
+
+    def _initialize_search(self):
         self._best = None
 
-        # Maintain an (auxiliary) explicit representation of the tree as a map from binary strings to nodes
-        self.tree = {} # Note this will also include non-explored nodes in the worklist
         # The original program forms the root of the tree
-        self.root = Node(path=(),solution=repair_model.initial_solution(program))
-        self.tree[()] = self.root
+        self.root = Node(path=(),solution=self.repair_model.initial_solution(self.original_program))
 
-        self.max_depth = max_depth # We only consider constraint strings with at most this length (inclusive)
         self.depth = 1 # Bounds the largest constraint string explored (dynamically increases)
 
         assert self.max_depth is not None # XXX reproducing random seed results is hard if future samples depend on what has happened during the search
         self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
         #print("orig labeling:", self.original_labeling)
 
-        self.hthresh = hthresh # Hamming distance heuristic threshold (default 1 => level-order traversal)
         # Nodes are sorted by their Hamming distance from the original program
-        hamming_count = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
+        self.hamming_count = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
         # frontier contains (yet-unexplored) children of existing leaves
         self.frontier = Frontier()
-        self.frontier.valuation = hamming_count
+        self.frontier.valuation = self.hamming_count
         self.frontier.threshold = self._current_threshold()
+        self.frontier.depth = self.depth
         self._add_children(self.root)
-
-        self.adaptive = adaptive # Whether to change self.hthresh dynamically
 
     @property
     def best(self):
         return self._best
 
     def soln_gen(self):
+        self._initialize_search()
         self.log_event("entered generator")
 
         # XXX Won't terminate (but should) if all leaves are unsat
         while True:
             for leaf in self.frontier.unblocked_generator():
+                self.log_event("popped leaf:", "len", len(leaf.path), "hamm", self.hamming_count(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
                 if self._check_solution_propagation(leaf): # We can propagate the solution
                     leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
@@ -188,7 +182,7 @@ class Digits:
             self.log_event("evaluator stats", *self.evaluator.get_stats())
             # We need to expand the depth of the search now that all unblocked are exhausted
             self.depth += 1
-            self.frontier.queue_pending()
+            self.frontier.depth = self.depth
             self.frontier.threshold = self._current_threshold()
             if self.depth > self.max_depth:
                 break
@@ -251,8 +245,7 @@ class Digits:
             for value in self.outputs:
                 child = Node(path=parent.path+(value,), parent=parent)
                 parent.children[value] = child
-                self.frontier.pending.append(child)
-                self.tree[child.path] = child
+                self.frontier.items.append(child)
 
     def _constraint_list(self, path):
         samples = [self.sampler.get(n) for n in range(len(path))]
