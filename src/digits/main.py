@@ -74,11 +74,21 @@ class Sampler:
 
 class Frontier:
     
-    def __init__(self):
-        self.valuation = None
-        self.threshold = None
-        self.depth = None
+    def __init__(self, parent_ref):
+        self._parent_ref = parent_ref
         self.items = list()
+
+    @property
+    def valuation(self):
+        return lambda n : hamming_count(n.path, self._parent_ref.original_labeling)
+
+    @property
+    def threshold(self):
+        return self._parent_ref.hthresh * self._parent_ref.depth
+
+    @property
+    def depth(self):
+        return self._parent_ref.depth
 
     # Respects changes to parameters mid-generator
     def unblocked_generator(self):
@@ -102,6 +112,10 @@ class Node:
             setattr(self, key, kwargs[key] if key in kwargs else None)
         if self.children is None:
             self.children = {}
+
+
+def hamming_count(ell1, ell2):
+    return len([t for t in zip(ell1, ell2) if t[0] != t[1]])
 
 
 #
@@ -143,13 +157,8 @@ class Digits:
         self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
         #print("orig labeling:", self.original_labeling)
 
-        # Nodes are sorted by their Hamming distance from the original program
-        self.hamming_count = lambda n : len([i for i in range(len(n.path)) if n.path[i] != self.original_labeling[i]])
         # frontier contains (yet-unexplored) children of existing leaves
-        self.frontier = Frontier()
-        self.frontier.valuation = self.hamming_count
-        self.frontier.threshold = self._current_threshold()
-        self.frontier.depth = self.depth
+        self.frontier = Frontier(self)
         self._add_children(self.root)
 
     @property
@@ -163,7 +172,7 @@ class Digits:
         # XXX Won't terminate (but should) if all leaves are unsat
         while True:
             for leaf in self.frontier.unblocked_generator():
-                self.log_event("popped leaf:", "len", len(leaf.path), "hamm", self.hamming_count(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
+                self.log_event("popped leaf", "len", len(leaf.path), "val", self.frontier.valuation(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
                 if self._check_solution_propagation(leaf): # We can propagate the solution
                     leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
@@ -182,8 +191,6 @@ class Digits:
             self.log_event("evaluator stats", *self.evaluator.get_stats())
             # We need to expand the depth of the search now that all unblocked are exhausted
             self.depth += 1
-            self.frontier.depth = self.depth
-            self.frontier.threshold = self._current_threshold()
             if self.depth > self.max_depth:
                 break
 
@@ -234,10 +241,6 @@ class Digits:
         if new_thresh < self.hthresh:
             self.log_event("updated thresh", new_thresh)
             self.hthresh = new_thresh
-            self.frontier.threshold = self._current_threshold()
-
-    def _current_threshold(self):
-        return self.depth * self.hthresh
 
     def _add_children(self, parent):
         # Only add the children if they are at a depth we would consider
