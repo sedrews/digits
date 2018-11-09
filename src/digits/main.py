@@ -172,7 +172,7 @@ class Digits:
         # XXX Won't terminate (but should) if all leaves are unsat
         while True:
             for leaf in self.frontier.unblocked_generator():
-                self.log_event("popped leaf", "len", len(leaf.path), "val", self.frontier.valuation(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
+                #self.log_event("popped leaf", "len", len(leaf.path), "val", self.frontier.valuation(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
                 if self._check_solution_propagation(leaf): # We can propagate the solution
                     leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
