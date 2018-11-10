@@ -127,7 +127,7 @@ def hamming_count(ell1, ell2):
 
 class Digits:
 
-    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1, adaptive=None):
+    def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1, adaptive=None, fspec=None):
 
         if isinstance(precondition, Sampler):
             self.sampler = precondition
@@ -137,6 +137,7 @@ class Digits:
         self.repair_model = repair_model
         self.evaluator = evaluator
         self.outputs = outputs
+        self.fspec = fspec
 
         # We only consider constraint strings with at most this length (inclusive)
         self.max_depth = max_depth
@@ -147,19 +148,19 @@ class Digits:
 
     def _initialize_search(self):
         self._best = None
-
-        # The original program forms the root of the tree
-        self.root = Node(path=(),solution=self.repair_model.initial_solution(self.original_program))
-
-        self.depth = 1 # Bounds the largest constraint string explored (dynamically increases)
-
         assert self.max_depth is not None # XXX reproducing random seed results is hard if future samples depend on what has happened during the search
-        self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
-        #print("orig labeling:", self.original_labeling)
-
         # frontier contains (yet-unexplored) children of existing leaves
         self.frontier = Frontier(self)
-        self._add_children(self.root)
+        if self.fspec is None:
+            # The original program forms the root of the tree
+            root = Node(path=(),solution=self.repair_model.initial_solution(self.original_program))
+            self.depth = 1 # Bounds the largest constraint string explored (dynamically increases)
+            self.original_labeling = [self.original_program(*self.sampler.get(i)) for i in range(self.max_depth)]
+            self._add_children(root)
+        else:
+            self.depth = 0
+            self.original_labeling = [self.fspec(*self.sampler.get(i)) for i in range(self.max_depth)]
+            self.frontier.items.append(Node(path=()))
 
     @property
     def best(self):
@@ -174,10 +175,10 @@ class Digits:
         # XXX Won't terminate (but should) if all leaves are unsat
         while True:
             for leaf in self.frontier.unblocked_generator():
-                tracking.log_event("popped leaf",
-                                   length=len(leaf.path),
-                                   valuation=self.frontier.valuation(leaf),
-                                   path=reduce(lambda x,y : str(x) + str(y), leaf.path))
+                #tracking.log_event("popped leaf",
+                #                   length=len(leaf.path),
+                #                   valuation=self.frontier.valuation(leaf),
+                #                   path=reduce(lambda x,y : str(x) + str(y), leaf.path, ""))
                 if self._check_solution_propagation(leaf): # We can propagate the solution
                     leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
@@ -203,6 +204,8 @@ class Digits:
 
     def _check_solution_propagation(self, leaf):
         parent = leaf.parent
+        if parent is None:
+            return False
         if parent.propto is None:
             # Run the parent program to see which child receives propagation (and cache)
             val = parent.solution.prog(*self.sampler.get(len(leaf.path) - 1))

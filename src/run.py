@@ -9,7 +9,7 @@ import numpy
 from digits import *
 
 
-def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt):
+def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt, fspec=None):
 
     start = time.time()
 
@@ -36,11 +36,11 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
     s1.get(max_depth)
     s2.get(eval_sample_size[1])
 
-    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog, eval_sample_size)
+    evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog if fspec is None else fspec, eval_sample_size)
 
     print("initial overhead,",time.time() - start)
 
-    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt)
+    d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt, fspec=fspec)
     soln_gen = d.soln_gen()
 
     start = time.time()
@@ -75,8 +75,11 @@ def parse_args():
                         help='The ratio of the depth used as a Hamming distance threshold for the optimized search; when == 1, the search proceeds in level-order')
     parser.add_argument('-a', '--adapt', required=False, nargs=2, type=float, default=None,
                         help='If specified, let (a,b) be its value: updates the --opt value to ae+b when finding a correct solution with error e')
+    parser.add_argument('-fs', '--fspec', required=False, type=str, default=None,
+                        help='Overrides repair: write a lambda function as a string to be eval()')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
-    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt)
+    fspec = None if args.fspec is None else eval(args.fspec)
+    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt, fspec)
