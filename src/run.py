@@ -50,14 +50,14 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
         except StopIteration:
             break
         if timeout is not None and time.time() - start > timeout:
-            d.log_event("timed out")
+            print("timed out")
             break
     if d.best is not None:
-        d.log_event("best", \
-                    "error", d.best.solution.error, \
-                    "holes", *[float(hole) for hole in d.best.solution.holes])
+        print("best:")
+        print("  error", d.best.solution.error)
+        print("  holes", [float(hole) for hole in d.best.solution.holes])
     else:
-        d.log_event("no solutions found")
+        print("no solutions found")
 
 def parse_args():
     parser = argparse.ArgumentParser()

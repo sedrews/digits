@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import total_ordering, reduce
 import heapq
-import time
 
+import digits.tracking as tracking
 
 # Using digits requires providing an implementation of
 #   1) Evaluator -- a way to check the postcondition and compute the error function
@@ -20,8 +20,9 @@ class Evaluator(ABC):
     def compute_error(self, prog, fast=True):
         pass
 
-    def get_stats(self):
-        return []
+    @property
+    def stats(self):
+        return None
 
 
 class RepairModel(ABC):
@@ -36,8 +37,9 @@ class RepairModel(ABC):
     def make_solution(self, constraints):
         pass
 
-    def get_stats(self):
-        return []
+    @property
+    def stats(self):
+        return None
 
 
 # Implementations of Evaluator and RepairModel need a common Solution class
@@ -127,8 +129,6 @@ class Digits:
 
     def __init__(self, precondition, program, repair_model, evaluator, outputs=(0,1), max_depth=None, hthresh=1, adaptive=None):
 
-        self.start_time = time.time()
-
         if isinstance(precondition, Sampler):
             self.sampler = precondition
         else:
@@ -167,12 +167,17 @@ class Digits:
 
     def soln_gen(self):
         self._initialize_search()
-        self.log_event("entered generator")
+
+        tracking.start_timer()
+        tracking.log_event("entered generator")
 
         # XXX Won't terminate (but should) if all leaves are unsat
         while True:
             for leaf in self.frontier.unblocked_generator():
-                #self.log_event("popped leaf", "len", len(leaf.path), "val", self.frontier.valuation(leaf), "path", reduce(lambda x,y: str(x) + str(y), leaf.path))
+                tracking.log_event("popped leaf",
+                                   length=len(leaf.path),
+                                   valuation=self.frontier.valuation(leaf),
+                                   path=reduce(lambda x,y : str(x) + str(y), leaf.path))
                 if self._check_solution_propagation(leaf): # We can propagate the solution
                     leaf.solution = leaf.parent.solution
                     self._add_children(leaf)
@@ -186,15 +191,15 @@ class Digits:
                 # Always yield what was done at this round
                 yield leaf
 
-            self.log_event("finished depth", self.depth)
-            self.log_event("synthesizer stats", *self.repair_model.get_stats())
-            self.log_event("evaluator stats", *self.evaluator.get_stats())
+            tracking.log_event("finished depth", depth=self.depth)
+            tracking.log_stats("synthesizer", self.repair_model.stats)
+            tracking.log_stats("evaluator", self.evaluator.stats)
             # We need to expand the depth of the search now that all unblocked are exhausted
             self.depth += 1
             if self.depth > self.max_depth:
                 break
 
-        self.log_event("exhausted generator")
+        tracking.log_event("exhausted generator")
 
     def _check_solution_propagation(self, leaf):
         parent = leaf.parent
@@ -212,9 +217,7 @@ class Digits:
             self._evaluate(leaf, fast=False)
             if self._check_best(leaf): # If it still looks like it, do so
                 self._best = leaf
-                self.log_event("new best", self._best.solution.error, \
-                        "path length", len(self._best.path), \
-                        "valuation", self.frontier.valuation(self._best))
+                tracking.log_event("new best", error=self._best.solution.error)
                 if self.adaptive is not None:
                     # Update the search threshold
                     self._update_hthresh(leaf.solution.error)
@@ -231,15 +234,10 @@ class Digits:
                 return True
         return False
             
-    def log_event(self, *args):
-        for arg in args:
-            assert "," not in str(arg)
-        print(reduce(lambda x,y : str(x) + "," + str(y), [time.time()-self.start_time] + list(args)))
-
     def _update_hthresh(self, error):
         new_thresh = self.adaptive[0] * error + self.adaptive[1]
         if new_thresh < self.hthresh:
-            self.log_event("updated thresh", new_thresh)
+            tracking.log_event("updated threshold", threshold=new_thresh)
             self.hthresh = new_thresh
 
     def _add_children(self, parent):

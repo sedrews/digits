@@ -6,6 +6,7 @@ from gmpy2 import mpq
 from z3 import *
 
 from .main import *
+from .tracking import Stats
 
 
 class SMTSolution(Solution):
@@ -31,44 +32,23 @@ class SMTRepair(RepairModel):
         self.hole_bounds = hole_bounds
 
         self.unsat_cores = CoreStore()
-        class Stats:
-            def __init__(self):
-                self.calls = 0 # calls = smt + pruned
-                self.smt = 0 # smt = sat + unsat
-                self.sat = 0
-                self.unsat = 0
-                self.pruned = 0
-                self.make_time = 0 # Includes sanity_time
-                self.sanity_time = 0
-                self._total_constraints = 0
-            @property
-            def avg_num_constraints(self):
-                try:
-                    return self._total_constraints / self.calls
-                except ZeroDivisionError:
-                    return 0
-            def as_array(self):
-                return [("calls", self.calls), \
-                        ("smt", self.smt), \
-                        ("sat", self.sat), \
-                        ("unsat", self.unsat), \
-                        ("pruned", self.pruned), \
-                        ("make_time", self.make_time), \
-                        ("sanity_time", self.sanity_time), \
-                        ("avg_num_constraints", self.avg_num_constraints)]
-            def __str__(self):
-                return reduce(lambda x,y: x + y, [p[0]+":"+str(p[1]) for p in self.as_array()])
-        self.stats = Stats()
+        self._stats = Stats(calls = 0, # calls = smt + pruned
+                            smt = 0, # smt = sat + unsat
+                            sat = 0, unsat = 0,
+                            pruned = 0, # Pruned using unsat cores
+                            make_time = 0, # Includes sanity_time
+                            sanity_time = 0)
 
-    def get_stats(self):
-        return [str(i) for i in chain(*self.stats.as_array())]
+    @property
+    def stats(self):
+        return self._stats
 
     # constraints maps each input Sample to an ouput (stored as a list of tuples) --
     # Digits maintains a guarantee about their fixed ordering across multiple calls
     def make_solution(self, constraints):
         start_make_time = time.time()
         self.stats.calls += 1
-        self.stats._total_constraints += len(constraints)
+
         # Try unsat core pruning
         if self.unsat_cores.check_match([c[1] for c in constraints]):
             self.stats.pruned += 1
@@ -80,6 +60,32 @@ class SMTRepair(RepairModel):
 
         # Do actual synthesis work
         self.stats.smt += 1
+        s = self._build_Solver(constraints)
+        if s.check() == z3.sat:
+            self.stats.sat += 1
+            # Build and return a Solution instance
+            hole_values = self.holes_from_model(s.model())
+            soln = self.sketch.partial_evaluate(*hole_values)
+            # Make sure the synthesized program is consistent with constraints
+            self.sanity_check(soln, constraints)
+            self.stats.make_time += time.time() - start_make_time
+            return SMTSolution(prog=soln, holes=hole_values)
+        else: # unsat
+            self.stats.unsat += 1
+            self.extract_unsat_core(s, constraints)
+            self.stats.make_time += time.time() - start_make_time
+            return None
+
+    def extract_unsat_core(self, s, constraints):
+        if len(s.unsat_core()) < len(constraints): # If the core is non-trivial
+            # The names of the variables stored their constraint index,
+            # i.e. some str(v) below looks like 'p15' when constraints[15] contributes to the unsat core
+            core = sorted([int(str(v)[1:]) for v in s.unsat_core()])
+            # Represent as a list of (constraint number, specified output)
+            core = [(v,constraints[v][1]) for v in core]
+            self.unsat_cores.add_core(core)
+
+    def _build_Solver(self, constraints):
         s = Solver()
         if self.hole_bounds is not None:
             for hole in self.Holes._fields:
@@ -94,39 +100,7 @@ class SMTRepair(RepairModel):
             constraint = constraints[i]
             conj_id = 'p' + str(i) # XXX this could collide with variable names
             s.assert_and_track(self.constraint_to_z3(constraint), conj_id)
-        if s.check() == z3.sat:
-            self.stats.sat += 1
-            # Build and return a Solution instance
-            hole_values = self.holes_from_model(s.model())
-            soln = self.sketch.partial_evaluate(*hole_values)
-            try:
-                # Make sure the synthesized program is consistent with constraints
-                start_sanity_time = time.time()
-                self.sanity_check(soln, constraints)
-                self.stats.sanity_time += time.time() - start_sanity_time
-            except AssertionError as e:
-                print("sanity check failed:")
-                print(e)
-                print("constraints", constraints)
-                print("holes", hole_values)
-                print("(float holes)", self.Holes(*[float(val) for val in hole_values]))
-                print("solver", s)
-                print("model", s.model())
-                exit(1)
-            self.stats.make_time += time.time() - start_make_time
-            return SMTSolution(prog=soln, holes=hole_values)
-        else: # unsat
-            self.stats.unsat += 1
-            # Extract an unsat core (when non-trivial)
-            if len(s.unsat_core()) < len(constraints):
-                # The names of the variables stored their constraint index,
-                # i.e. some str(v) below looks like 'p15' when constraints[15] contributes to the unsat core
-                core = sorted([int(str(v)[1:]) for v in s.unsat_core()])
-                # Represent as a list of (constraint number, specified output)
-                core = [(v,constraints[v][1]) for v in core]
-                self.unsat_cores.add_core(core)
-            self.stats.make_time += time.time() - start_make_time
-            return None
+        return s
 
     # constraint is a tuple of (Sample, output) where Sample is an input tuple
     def constraint_to_z3(self, constraint):
@@ -141,6 +115,11 @@ class SMTRepair(RepairModel):
                             for attr in self.Holes._fields])
 
     def sanity_check(self, soln, constraints):
+        start_sanity_time = time.time()
+        self._sanity_check(soln, constraints)
+        self.stats.sanity_time += time.time() - start_sanity_time
+
+    def _sanity_check(self, soln, constraints):
         for sample,output in constraints:
             o = soln(*sample)
             assert o == output, str(sample) + ' does not map to ' + str(output) + '; instead ' + str(o)
