@@ -7,6 +7,7 @@ from z3 import *
 
 from .main import *
 from .tracking import Stats
+from .cvc4 import cvc4_query_from_z3
 
 
 class SMTSolution(Solution):
@@ -23,13 +24,14 @@ class SMTRepair(RepairModel):
     # input_variables is a list of the z3 variable objects (in the same order as in Sample and in function header)
     # output_variable is the z3 variable object for the return value
     # Holes is a named tuple whose fields are the hole variable names
-    def __init__(self, sketch, template, input_variables, output_variable, Holes, hole_bounds=None):
+    def __init__(self, sketch, template, input_variables, output_variable, Holes, hole_bounds=None, cvc4=False):
         self.sketch = sketch
         self.template = template
         self.input_variables = input_variables
         self.output_variable = output_variable
         self.Holes = Holes
         self.hole_bounds = hole_bounds
+        self.cvc4 = cvc4
 
         self.unsat_cores = CoreStore()
         self._stats = Stats(calls = 0, # calls = smt + pruned
@@ -59,28 +61,49 @@ class SMTRepair(RepairModel):
             return None
 
         # Do actual synthesis work
-        self.stats.smt += 1
         s = self._build_Solver(constraints)
-        if s.check() == z3.sat:
-            self.stats.sat += 1
-            # Build and return a Solution instance
-            hole_values = self.holes_from_model(s.model())
-            soln = self.sketch.partial_evaluate(*hole_values)
-            # Make sure the synthesized program is consistent with constraints
-            self.sanity_check(soln, constraints)
-            self.stats.make_time += time.time() - start_make_time
-            return SMTSolution(prog=soln, holes=hole_values)
-        else: # unsat
-            self.stats.unsat += 1
-            self.extract_unsat_core(s, constraints)
-            self.stats.make_time += time.time() - start_make_time
-            return None
+        res = self._smt_query(s, constraints)
+        self.stats.make_time += time.time() - start_make_time
+        return res
 
-    def extract_unsat_core(self, s, constraints):
-        if len(s.unsat_core()) < len(constraints): # If the core is non-trivial
+    def _smt_query(self, s, constraints):
+        self.stats.smt += 1
+        if not self.cvc4: # Use z3
+            if s.check() == z3.sat:
+                self.stats.sat += 1
+                # Build and return a Solution instance
+                hole_values = self.holes_from_model(s.model())
+                soln = self.sketch.partial_evaluate(*hole_values)
+                # Make sure the synthesized program is consistent with constraints
+                self.sanity_check(soln, constraints)
+                return SMTSolution(prog=soln, holes=hole_values)
+            else: # unsat
+                self.stats.unsat += 1
+                self.extract_unsat_core(s.unsat_core(), constraints)
+                return None
+        else: # Use cvc4
+            model,core = cvc4_query_from_z3(s, list(self.Holes._fields), ['p' + str(i) for i in range(len(constraints))])
+            if model is not None: # sat
+                assert core is None
+                self.stats.sat += 1
+                hole_values = self.Holes(**{attr : mpq(*model[attr]) for attr in model})
+                soln = self.sketch.partial_evaluate(*hole_values)
+                # Make sure the synthesized program is consistent with constraints
+                self.sanity_check(soln, constraints)
+                return SMTSolution(prog=soln, holes=hole_values)
+            elif core is not None: # unsat
+                assert model is None
+                self.stats.unsat += 1
+                self.extract_unsat_core(core, constraints)
+                return None
+            else:
+                assert False
+
+    def extract_unsat_core(self, core, constraints):
+        if len(core) < len(constraints): # If the core is non-trivial
             # The names of the variables stored their constraint index,
             # i.e. some str(v) below looks like 'p15' when constraints[15] contributes to the unsat core
-            core = sorted([int(str(v)[1:]) for v in s.unsat_core()])
+            core = sorted([int(str(v)[1:]) for v in core])
             # Represent as a list of (constraint number, specified output)
             core = [(v,constraints[v][1]) for v in core]
             self.unsat_cores.add_core(core)

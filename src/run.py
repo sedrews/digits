@@ -9,7 +9,7 @@ import numpy
 from digits import *
 
 
-def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt, fspec=None):
+def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt, fspec=None, cvc4=False):
 
     start = time.time()
 
@@ -26,7 +26,7 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
     H_default = Holes(**{hole : p.hole_data[1][hole].default for hole in p.hole_data[0]})
     H_bounds = {hole : p.hole_data[1][hole].bounds for hole in p.hole_data[0]}
 
-    repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes, H_bounds)
+    repair_model = SMTRepair(p.D_exec, p.D_z3, p.z3_vars.inputs, p.z3_vars.output, Holes, H_bounds, cvc4)
 
     orig_prog = p.D_exec.partial_evaluate(*H_default)
     
@@ -77,9 +77,14 @@ def parse_args():
                         help='If specified, let (a,b) be its value: updates the --opt value to ae+b when finding a correct solution with error e')
     parser.add_argument('-fs', '--fspec', required=False, type=str, default=None,
                         help='Overrides repair: write a lambda function as a string to be eval()')
+    parser.add_argument('-c', '--cvc4', required=False, type=str, default=None,
+                        help='Use cvc4 instead of z3; provide the path to the binary')
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_args()
     fspec = None if args.fspec is None else eval(args.fspec)
-    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt, fspec)
+    if args.cvc4 is not None:
+        from digits.cvc4 import set_path
+        set_path(args.cvc4)
+    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt, fspec, args.cvc4 is not None)
