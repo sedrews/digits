@@ -1,0 +1,9 @@
+fr/box_d1_b02.fr
+fr/box_d1_b04.fr
+fr/box_d1_b08.fr
+fr/box_d2_b02.fr
+fr/box_d2_b04.fr
+fr/box_d2_b08.fr
+fr/box_d3_b02.fr
+fr/box_d3_b04.fr
+fr/box_d3_b08.fr

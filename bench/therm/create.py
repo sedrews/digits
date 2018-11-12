@@ -1,3 +1,5 @@
+from itertools import product
+
 prefix = """def pre():
     modal = step([(0,1,1/3),(1,2,1/3),(2,3,1/3)])
     if modal < 1:
@@ -63,4 +65,11 @@ def build(n, t):
     return code
 
 if __name__ == '__main__':
-    print(build(10, 10))
+    unrollings = [40,20,10,5]
+    binarizations = [8,4,2]
+    for u,b in product(unrollings, binarizations):
+        fname = "therm_u" + str(u) + "_b" + str(b) + ".fr"
+        f = open("fr/" + fname, 'w')
+        f.write(build(u,b))
+        f.close()
+    #print(build(10, 10))
