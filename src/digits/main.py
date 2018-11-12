@@ -166,10 +166,12 @@ class Digits:
     def best(self):
         return self._best
 
-    def soln_gen(self):
+    def soln_gen(self, jsonlfile=None):
         self._initialize_search()
 
         tracking.start_timer()
+        if jsonlfile is not None:
+            tracking.init_jsonl(jsonlfile)
         tracking.log_event("entered generator")
 
         # XXX Won't terminate (but should) if all leaves are unsat

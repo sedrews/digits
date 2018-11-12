@@ -9,7 +9,7 @@ import numpy
 from digits import *
 
 
-def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt, fspec=None, cvc4=False):
+def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, opt_ratio, adapt, fspec=None, cvc4=False, jsonlfile=False):
 
     start = time.time()
 
@@ -38,10 +38,10 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
 
     evaluator = SamplingEvaluator(s2, p.post_exec, orig_prog if fspec is None else fspec, eval_sample_size)
 
-    print("initial overhead,",time.time() - start)
+    #print("initial overhead,",time.time() - start)
 
     d = Digits(s1, orig_prog, repair_model, evaluator, max_depth=max_depth, hthresh=opt_ratio, adaptive=adapt, fspec=fspec)
-    soln_gen = d.soln_gen()
+    soln_gen = d.soln_gen(jsonlfile)
 
     start = time.time()
     while True:
@@ -53,9 +53,8 @@ def run_benchmark(filename, max_depth, timeout, random_seed, eval_sample_size, o
             print("timed out")
             break
     if d.best is not None:
-        print("best:")
-        print("  error", d.best.solution.error)
-        print("  holes", [float(hole) for hole in d.best.solution.holes])
+        print("best error", d.best.solution.error,
+              "holes", [float(hole) for hole in d.best.solution.holes])
     else:
         print("no solutions found")
 
@@ -79,6 +78,8 @@ def parse_args():
                         help='Overrides repair: write a lambda function as a string to be eval()')
     parser.add_argument('-c', '--cvc4', required=False, type=str, default=None,
                         help='Use cvc4 instead of z3; provide the path to the binary')
+    parser.add_argument('-j', '--jsonl', required=False, type=str, default=None,
+                        help='Output run statistics to jsonl file instead of stdout')
     return parser.parse_args()
 
 if __name__ == '__main__':
@@ -87,4 +88,4 @@ if __name__ == '__main__':
     if args.cvc4 is not None:
         from digits.cvc4 import set_path
         set_path(args.cvc4)
-    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt, fspec, args.cvc4 is not None)
+    run_benchmark(args.file, args.depth, args.time, args.seed, args.size, args.opt, args.adapt, fspec, args.cvc4 is not None, args.jsonl)
