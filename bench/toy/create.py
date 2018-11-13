@@ -2,7 +2,7 @@ from functools import reduce
 from itertools import product
 
 def build(dims, epsilon):
-    return build_pre(dims) + "\n" + build_body(dims, epsilon) + "\n" + build_post()
+    return build_pre(dims) + "\n" + build_body(dims, epsilon) + "\n" + build_post(epsilon)
 
 def varlist(dims):
     assert dims > 0
@@ -34,11 +34,12 @@ def build_body(dims, epsilon):
     code_str += "    return ret\n"
     return code_str
 
-def build_post():
+def build_post(epsilon):
     code_str = "def post(Pr):\n"
     code_str += "    neg = Pr({\"accept\" : True, \"pos\" : False})\n"
     code_str += "    pos = Pr({\"accept\" : True, \"pos\" : True})\n"
-    code_str += "    return neg >= pos\n"
+    code_str += "    accept = Pr({\"accept\" : True}) >= " + str(epsilon / 2) + "\n"
+    code_str += "    return neg >= pos and accept\n"
     return code_str
 
 if __name__ == '__main__':
