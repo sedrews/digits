@@ -42,8 +42,8 @@ def build_post():
     return code_str
 
 if __name__ == '__main__':
-    dimensions = [1,2,3]
-    bounds = [.2,.4,.8]
+    dimensions = [1,2,3] # VC dimension is dim*2
+    bounds = [.1,.2,.4,.8] # Optimal solution is at bound/2
     for d,b in product(dimensions, bounds):
         fname = "box_d" + str(d) + "_b" + str(b).replace(".", "") + ".fr"
         f = open("fr/" + fname, 'w')
