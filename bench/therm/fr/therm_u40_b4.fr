@@ -1,0 +1,397 @@
+def pre():
+    modal = step([(0,1,1/3),(1,2,1/3),(2,3,1/3)])
+    if modal < 1:
+        lin = gaussian(30, 9)
+    elif modal < 2:
+        lin = gaussian(35, 9)
+    else:
+        lin = gaussian(50, 9)
+    ltarget = gaussian(75, 1)
+    return lin, ltarget
+
+def D(lin, ltarget):
+    h = Hole(0, (0, 10))
+    tOn = ltarget + Hole(0, (-10, 0))
+    tOff = ltarget + Hole(0, (0, 10))
+    isOn = 0
+    K = 0.1
+    curL = lin
+    event("sanity1", tOn < tOff)
+    event("sanity2", h > 0)
+    event("sanity3", h < 20)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_0", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_1", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_2", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_3", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_4", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_5", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_6", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_7", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_8", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_9", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_10", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_11", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_12", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_13", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_14", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_15", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_16", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_17", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_18", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_19", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_20", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_21", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_22", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_23", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_24", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_25", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_26", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_27", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_28", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_29", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_30", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_31", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_32", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_33", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_34", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_35", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_36", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_37", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_38", curL < 120)
+    if isOn > 0.5:
+        curL = curL + (h - K * (curL - lin))
+        if curL > tOff:
+            isOn = 0
+    else:
+        curL = curL - K * (curL - lin)
+        if curL < tOn:
+            isOn = 1
+    event("body_39", curL < 120)
+    Error = curL - ltarget
+    if Error < 0:
+        Error = Error * -1
+    if Error < 4:
+        ret = 0
+    else:
+        ret = 1
+    return ret
+
+def post(Pr):
+    thresh = .9
+    es = ["sanity1", "sanity2", "sanity3" , "body_0", "body_1", "body_2", "body_3", "body_4", "body_5", "body_6", "body_7", "body_8", "body_9", "body_10", "body_11", "body_12", "body_13", "body_14", "body_15", "body_16", "body_17", "body_18", "body_19", "body_20", "body_21", "body_22", "body_23", "body_24", "body_25", "body_26", "body_27", "body_28", "body_29", "body_30", "body_31", "body_32", "body_33", "body_34", "body_35", "body_36", "body_37", "body_38", "body_39"]
+    for e in es:
+        if Pr({e : True}) <= thresh:
+            return False
+    return True

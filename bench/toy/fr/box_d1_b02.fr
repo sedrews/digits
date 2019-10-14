@@ -1,0 +1,18 @@
+def pre():
+    x0 = step([(-1,1,1)])
+    return x0
+
+def D(x0):
+    event("pos", x0 >= 0)
+    if Hole(0) <= x0 and x0 <= Hole(0.2):
+        ret = 1
+    else:
+        ret = 0
+    event("accept", ret == 1)
+    return ret
+
+def post(Pr):
+    neg = Pr({"accept" : True, "pos" : False})
+    pos = Pr({"accept" : True, "pos" : True})
+    accept = Pr({"accept" : True}) >= 0.1
+    return neg >= pos and accept

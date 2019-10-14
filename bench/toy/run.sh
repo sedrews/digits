@@ -1,6 +1,6 @@
-FILELIST=$1 # A list of paths to .fr files
-PARAMLIST=$2 # A list of arguments --- first block is a filename identifier
-RESDIR=$3
+FILELIST=$1 # A file containing a list of paths to .fr files
+PARAMLIST=$2 # A file containing a list of arguments --- first block is a filename identifier
+RESDIR=$3 # Provide the path of a non-existing directory to store output files
 mkdir $RESDIR
 if [ $? -ne 0 ]; then
     echo Specify a non-existing directory to create and store output files

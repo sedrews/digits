@@ -38,9 +38,8 @@ def toy():
     options = ["o1", "o03", "o015", "o007", "a1"]
     fname = lambda d,i,o : "box_d" + str(d) + "_b" + i + "_s0_" + o + ".jsonl"
     stats = {(d,i,o) : RunStats(prefix + fname(d,i,o)) for d,i,o in product(dimension, initial, options)}
-    for d,i in product(dimension, initial):
-        for o in options:
-            print(fname(d,i,o), stats[(d,i,o)].depth, stats[(d,i,o)].best)
+    ToyData = namedtuple('ToyData', ['benchmark', 'depth', 'error'])
+    return [ToyData(fname(d,i,o), stats[(d,i,o)].depth, stats[(d,i,o)].best) for d,i,o in product(dimension, initial, options)]
 
 def foo():
     prefix = "toy/res/"
@@ -83,12 +82,14 @@ def error_depth_time_plot(options, runs, num):
     #plt.show()
 
 if __name__ == '__main__':
-    foo()
-    exit(0)
+    #foo()
+    #exit(0)
+    print("toy:")
+    for d in toy():
+        print(d)
     print("therm:")
     for d in therm():
         print(d)
     print("orig:")
     for d in orig():
-        #print(d)
-        print(reduce(lambda x,y : str(x) + "," + str(y), list(d)))
+        print(d)

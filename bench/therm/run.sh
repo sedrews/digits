@@ -1,5 +1,5 @@
-RESDIR=$1
-CVC4=$2
+RESDIR=$1 # Provide the path of a non-existing directory to store output files
+CVC4=$2 # (Optinal) provide the path to a CVC4 binary; if not provided, z3py is used
 mkdir $RESDIR
 if [ $? -ne 0 ]; then
     echo Specify a non-existing directory to create and store output files
